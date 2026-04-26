@@ -2,56 +2,46 @@
   let { id } = $props();
   /** @type {Record<string, string>} */
   const map = {
-    rpg: 'sword',
-    platformer: 'jump',
-    puzzle: 'puzzle',
-    rts: 'units',
-    roguelike: 'dice',
-    narrative: 'book'
+    view: 'eye',
+    gameplay: 'pad',
+    emotion: 'heart',
+    multiplayer: 'people'
   };
   const variant = $derived(map[id] || 'dot');
 </script>
 
 <span class="icon" aria-hidden="true">
-  {#if variant === 'sword'}
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
-      <path class="anim-sway" d="M14 4 L20 10 M20 10 L17 13 L11 7 Z M11 7 L4 14 L7 17 L14 10" />
+  {#if variant === 'eye'}
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M2.5 12 C 5 6, 19 6, 21.5 12 C 19 18, 5 18, 2.5 12 Z" />
+      <circle class="anim-iris" cx="12" cy="12" r="3.2" fill="currentColor" />
+      <circle cx="13.2" cy="10.8" r="0.8" fill="#ffffff" opacity="0.85" />
     </svg>
-  {:else if variant === 'jump'}
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
-      <circle class="anim-bounce" cx="12" cy="6" r="2.5" />
-      <path class="anim-bounce" d="M12 9 v5 M12 14 l-4 5 M12 14 l4 5 M9 12 l3-1 3 1" />
-      <line x1="3" y1="22" x2="21" y2="22" stroke-dasharray="2 3" opacity="0.5" />
+  {:else if variant === 'pad'}
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M4 9 q0 -3 4 -3 h8 q4 0 4 3 v6 q0 3 -3 3 q-2 0 -3 -2 H10 q-1 2 -3 2 q-3 0 -3 -3 z" />
+      <line class="anim-press-1" x1="7" y1="11.5" x2="9.5" y2="11.5" />
+      <line class="anim-press-1" x1="8.25" y1="10.25" x2="8.25" y2="12.75" />
+      <circle class="anim-press-2" cx="15.5" cy="11" r="0.9" fill="currentColor" />
+      <circle class="anim-press-3" cx="17.5" cy="13" r="0.9" fill="currentColor" />
     </svg>
-  {:else if variant === 'puzzle'}
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
-      <path class="anim-pulse" d="M4 4 h6 v3 a2 2 0 0 0 4 0 v-3 h6 v6 h-3 a2 2 0 0 0 0 4 h3 v6 h-6 v-3 a2 2 0 0 0 -4 0 v3 h-6 v-6 h3 a2 2 0 0 0 0 -4 h-3 z" />
+  {:else if variant === 'heart'}
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round">
+      <path class="anim-beat" d="M12 20 C 6 15, 3 11, 3 8 a4 4 0 0 1 9 -1 a4 4 0 0 1 9 1 c 0 3 -3 7 -9 12 z" fill="currentColor" fill-opacity="0.18" />
     </svg>
-  {:else if variant === 'units'}
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
-      <rect class="anim-shift-1" x="3" y="3" width="7" height="7" rx="1" />
-      <rect class="anim-shift-2" x="14" y="3" width="7" height="7" rx="1" />
-      <rect class="anim-shift-3" x="3" y="14" width="7" height="7" rx="1" />
-      <rect class="anim-shift-4" x="14" y="14" width="7" height="7" rx="1" />
-    </svg>
-  {:else if variant === 'dice'}
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round">
-      <g class="anim-rotate">
-        <rect x="4" y="4" width="16" height="16" rx="3" />
-        <circle cx="9" cy="9" r="1.2" fill="currentColor" />
-        <circle cx="15" cy="9" r="1.2" fill="currentColor" />
-        <circle cx="12" cy="12" r="1.2" fill="currentColor" />
-        <circle cx="9" cy="15" r="1.2" fill="currentColor" />
-        <circle cx="15" cy="15" r="1.2" fill="currentColor" />
+  {:else if variant === 'people'}
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round">
+      <g class="anim-wave-1">
+        <circle cx="8" cy="8" r="2.4" />
+        <path d="M3.5 18 q0 -4 4.5 -4 q4.5 0 4.5 4" />
+      </g>
+      <g class="anim-wave-2">
+        <circle cx="16.5" cy="9" r="2.2" />
+        <path d="M12.5 18.5 q0 -3.5 4 -3.5 q4 0 4 3.5" />
       </g>
     </svg>
-  {:else if variant === 'book'}
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round">
-      <path class="anim-flip" d="M4 5 q4 -2 8 0 v14 q-4 -2 -8 0 z" />
-      <path class="anim-flip" d="M20 5 q-4 -2 -8 0 v14 q4 -2 8 0 z" />
-    </svg>
   {:else}
-    <svg viewBox="0 0 24 24"><circle class="anim-pulse" cx="12" cy="12" r="4" fill="currentColor" /></svg>
+    <svg viewBox="0 0 24 24"><circle class="anim-iris" cx="12" cy="12" r="4" fill="currentColor" /></svg>
   {/if}
 </span>
 
@@ -59,24 +49,39 @@
   .icon { display: inline-flex; align-items: center; justify-content: center; }
   .icon svg { width: 100%; height: 100%; overflow: visible; }
 
-  .anim-sway { animation: sway 2.6s ease-in-out infinite; transform-origin: 12px 12px; }
-  @keyframes sway { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg); } }
+  .anim-iris {
+    animation: iris-scan 3.8s ease-in-out infinite;
+    transform-origin: 12px 12px;
+  }
+  @keyframes iris-scan {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-1.5px); }
+    75% { transform: translateX(1.5px); }
+  }
 
-  .anim-bounce { animation: bounce 1.6s ease-in-out infinite; }
-  @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+  .anim-press-1 { animation: press 1.8s ease-in-out infinite; transform-origin: 8.25px 11.5px; }
+  .anim-press-2 { animation: press 1.8s ease-in-out infinite 0.3s; transform-origin: 15.5px 11px; }
+  .anim-press-3 { animation: press 1.8s ease-in-out infinite 0.6s; transform-origin: 17.5px 13px; }
+  @keyframes press {
+    0%, 70%, 100% { transform: scale(1); opacity: 1; }
+    35% { transform: scale(0.7); opacity: 0.6; }
+  }
 
-  .anim-pulse { animation: pulse 2.2s ease-in-out infinite; transform-origin: 12px 12px; }
-  @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(0.92); opacity: 0.7; } }
+  .anim-beat {
+    animation: beat 1.2s ease-in-out infinite;
+    transform-origin: 12px 12px;
+  }
+  @keyframes beat {
+    0%, 100% { transform: scale(1); }
+    20% { transform: scale(1.12); }
+    40% { transform: scale(0.95); }
+    60% { transform: scale(1.06); }
+  }
 
-  .anim-rotate { animation: rotate 4.5s linear infinite; transform-origin: 12px 12px; }
-  @keyframes rotate { to { transform: rotate(360deg); } }
-
-  .anim-flip { animation: flip 3s ease-in-out infinite; transform-origin: 12px 12px; }
-  @keyframes flip { 0%, 100% { transform: scaleX(1); } 50% { transform: scaleX(0.85) translateY(-1px); } }
-
-  .anim-shift-1 { animation: shift 2.8s ease-in-out infinite 0s; }
-  .anim-shift-2 { animation: shift 2.8s ease-in-out infinite 0.4s; }
-  .anim-shift-3 { animation: shift 2.8s ease-in-out infinite 0.8s; }
-  .anim-shift-4 { animation: shift 2.8s ease-in-out infinite 1.2s; }
-  @keyframes shift { 0%, 100% { transform: translate(0,0); } 50% { transform: translate(0.5px, -0.5px); } }
+  .anim-wave-1 { animation: wave 2.4s ease-in-out infinite; transform-origin: 8px 12px; }
+  .anim-wave-2 { animation: wave 2.4s ease-in-out infinite 1.2s; transform-origin: 16.5px 12px; }
+  @keyframes wave {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-1.5px); }
+  }
 </style>

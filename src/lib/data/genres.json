@@ -1,74 +1,56 @@
 {
   "root": {
     "id": "root",
-    "label": "你想做什麼類型的遊戲？",
-    "description": "選一個類型開始探索設計面向"
+    "label": "你的遊戲必須的元素是？",
+    "description": "選一個元素開始探索，每選一項就會進入下一個。"
   },
   "genres": [
     {
-      "id": "rpg",
-      "label": "角色扮演 RPG",
-      "color": "#a78bfa",
+      "id": "view",
+      "label": "視角",
+      "description": "玩家從哪個距離看世界。",
+      "color": "#38bdf8",
       "topics": [
-        { "id": "rpg-progression", "label": "成長系統", "detail": "等級、技能樹、裝備迭代——讓玩家感到角色變強的核心迴圈。" },
-        { "id": "rpg-narrative", "label": "敘事結構", "detail": "主線、支線、分歧結局；對話樹 vs 過場演出的取捨。" },
-        { "id": "rpg-combat", "label": "戰鬥節奏", "detail": "回合制 / ATB / 即時動作；資源管理與技能 cooldown 設計。" },
-        { "id": "rpg-world", "label": "世界探索", "detail": "地圖密度、興趣點分佈、迷路與引導的平衡。" }
+        { "id": "view-fp", "label": "第一人稱", "detail": "玩家即角色：沉浸感最強，但身體感與環境感最弱。" },
+        { "id": "view-tp", "label": "第三人稱", "detail": "看見自己：動作展演與場景關係最容易表達。" },
+        { "id": "view-top", "label": "俯視 / 等角", "detail": "全局掌握：策略與空間關係優先於角色臨場感。" },
+        { "id": "view-side", "label": "橫向 / 2D", "detail": "簡化的舞台：物理與節奏最純粹的表現形式。" }
       ]
     },
     {
-      "id": "platformer",
-      "label": "平台跳躍",
+      "id": "gameplay",
+      "label": "玩法",
+      "description": "玩家會做什麼動作。",
       "color": "#fb923c",
       "topics": [
-        { "id": "plat-controls", "label": "手感與物理", "detail": "Coyote time、jump buffer、加速曲線——手感的微觀魔法。" },
-        { "id": "plat-level", "label": "關卡語言", "detail": "教學-變奏-組合-測驗 的四段式關卡設計法。" },
-        { "id": "plat-enemy", "label": "敵人設計", "detail": "每種敵人應對應一種玩家動詞，避免功能重複。" },
-        { "id": "plat-collect", "label": "收集物激勵", "detail": "金幣、星星、隱藏要素的密度與獎勵節奏。" }
+        { "id": "play-combat", "label": "戰鬥", "detail": "資源、輸入、回饋三者的循環——所有戰鬥的核心結構。" },
+        { "id": "play-puzzle", "label": "解謎", "detail": "規則的延伸與重組：謎題就是被偽裝的數學。" },
+        { "id": "play-explore", "label": "探索", "detail": "未知 vs 引導：玩家迷路時是不是『有意義的迷路』？" },
+        { "id": "play-collect", "label": "收集", "detail": "稀有性、密度、節奏——收集慾的三個槓桿。" }
       ]
     },
     {
-      "id": "puzzle",
-      "label": "解謎",
-      "color": "#34d399",
-      "topics": [
-        { "id": "puz-mechanic", "label": "核心機制", "detail": "一個機制能延伸出多少變化？——機制深度的試金石。" },
-        { "id": "puz-progression", "label": "難度曲線", "detail": "Aha moment 之間的間隔；卡關時的提示策略。" },
-        { "id": "puz-aesthetic", "label": "美學一致性", "detail": "符號系統、色彩語義；解謎的視覺即規則。" },
-        { "id": "puz-narrative", "label": "敘事融合", "detail": "謎題本身敘事 vs 謎題之間插敘的兩種結構。" }
-      ]
-    },
-    {
-      "id": "rts",
-      "label": "即時戰略 RTS",
-      "color": "#60a5fa",
-      "topics": [
-        { "id": "rts-economy", "label": "經濟系統", "detail": "資源類型、採集速率、擴張誘因 vs 風險。" },
-        { "id": "rts-balance", "label": "兵種剋制", "detail": "石頭剪刀布只是起點；真正的平衡在組合與時機。" },
-        { "id": "rts-apm", "label": "操作負擔", "detail": "玩家應該忙在哪？決策 vs 執行的比重設計。" },
-        { "id": "rts-map", "label": "地圖結構", "detail": "資源點配置、視野阻擋、節奏控制的物理基礎。" }
-      ]
-    },
-    {
-      "id": "roguelike",
-      "label": "Roguelike",
+      "id": "emotion",
+      "label": "情緒",
+      "description": "玩家會感覺到什麼。",
       "color": "#f472b6",
       "topics": [
-        { "id": "rog-run", "label": "單局結構", "detail": "一場 run 的長度、節奏、結尾成就感如何設計。" },
-        { "id": "rog-meta", "label": "元進度", "detail": "死亡後永久解鎖 vs 純技術 progression 的取捨。" },
-        { "id": "rog-build", "label": "Build 構築", "detail": "隨機性 + 玩家選擇 = 每場不同卻有掌控感。" },
-        { "id": "rog-difficulty", "label": "難度與隨機", "detail": "區分『公平的難』與『運氣不好』——隨機設計的核心倫理。" }
+        { "id": "emo-tense", "label": "緊張", "detail": "壓力 = 風險 + 時間限制 + 不確定性，三選二就會緊張。" },
+        { "id": "emo-calm", "label": "放鬆", "detail": "去除失敗壓力：讓玩家『可以慢慢來』本身就是設計。" },
+        { "id": "emo-immerse", "label": "沉浸", "detail": "UI 退場、聲音上場——感官信號決定臨場感。" },
+        { "id": "emo-excite", "label": "興奮", "detail": "節奏 + 音樂 + 視覺爆發——多感官同時 peak 的瞬間。" }
       ]
     },
     {
-      "id": "narrative",
-      "label": "敘事冒險",
-      "color": "#fbbf24",
+      "id": "multiplayer",
+      "label": "多人",
+      "description": "和誰一起玩。",
+      "color": "#a78bfa",
       "topics": [
-        { "id": "nar-choice", "label": "選擇與後果", "detail": "假選擇 vs 真分歧；玩家感知的『我做了選擇』比實際分支更重要。" },
-        { "id": "nar-pace", "label": "節奏控制", "detail": "互動 vs 觀看的比例；何時讓玩家行動、何時讓玩家感受。" },
-        { "id": "nar-character", "label": "角色塑造", "detail": "透過行動而非對白展現性格——遊戲特有的角色語言。" },
-        { "id": "nar-tone", "label": "氛圍調度", "detail": "音樂、光線、鏡頭——情緒由系統而非台詞傳達。" }
+        { "id": "mp-solo", "label": "單人", "detail": "玩家的對手是系統與自己——心流的純粹形式。" },
+        { "id": "mp-coop", "label": "合作", "detail": "互補 vs 重複：合作是讓兩人都不可替代。" },
+        { "id": "mp-versus", "label": "競爭", "detail": "公平起點 + 不同路徑：競技性與多樣性的平衡。" },
+        { "id": "mp-async", "label": "非同步", "detail": "不必同時在線：留言、足跡、幽靈玩家——時間錯開的社交。" }
       ]
     }
   ]

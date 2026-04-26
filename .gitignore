@@ -9,3 +9,5 @@ node_modules
 .DS_Store
 Thumbs.db
 frame.md
+TODO.md
+src/routes/edit/
