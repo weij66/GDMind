@@ -1,51 +1,43 @@
 <script>
-  import { onMount, onDestroy } from 'svelte';
-  import { SvelteFlow, Background } from '@xyflow/svelte';
-  import { writable } from 'svelte/store';
+  import { fly, scale, fade } from 'svelte/transition';
+  import { cubicOut, cubicInOut } from 'svelte/easing';
   import { base } from '$app/paths';
   import { marked } from 'marked';
-  import {
-    forceSimulation,
-    forceLink,
-    forceManyBody,
-    forceX,
-    forceY,
-    forceCollide
-  } from 'd3-force';
-  import '@xyflow/svelte/dist/style.css';
   import data from '$lib/data/genres.json';
-  import RootNode from '$lib/RootNode.svelte';
-  import GenreNode from '$lib/GenreNode.svelte';
-  import TopicNode from '$lib/TopicNode.svelte';
-  import FitController from '$lib/FitController.svelte';
+  import GenreIcon from '$lib/GenreIcon.svelte';
 
   marked.setOptions({ breaks: true, gfm: true });
 
-  const nodeTypes = { root: RootNode, genre: GenreNode, topic: TopicNode };
-
-  /** @type {import('svelte/store').Writable<any[]>} */
-  const nodes = writable([]);
-  /** @type {import('svelte/store').Writable<any[]>} */
-  const edges = writable([]);
-
-  // 四幕：1=只有總領, 2=展開類型, 3=展開類型內面向, 4=面向詳情面板
-  let stage = $state(1);
-  /** @type {string | null} */
+  /** @type {'genre' | 'topic'} */
+  let stage = $state('genre');
+  /** @type {{id:string, label:string, color:string, topics:any[]} | null} */
   let selectedGenre = $state(null);
-  /** @type {{id:string, label:string, detail:string, _color?:string} | null} */
+  /** @type {{id:string, label:string, detail:string} | null} */
   let selectedTopic = $state(null);
-
-  const fitTrigger = $derived(`${stage}-${selectedGenre}`);
-
   let topicHtml = $state('');
   let topicLoading = $state(false);
 
-  /** @param {{id:string, label:string, detail:string}} topic */
-  async function loadTopicMarkdown(topic) {
+  const RADIUS = 260;
+
+  /** @param {number} i @param {number} total */
+  function clusterPos(i, total) {
+    const angle = (i / total) * Math.PI * 2 - Math.PI / 2;
+    return { x: Math.cos(angle) * RADIUS, y: Math.sin(angle) * RADIUS };
+  }
+
+  /** @param {any} g */
+  function pickGenre(g) {
+    selectedGenre = g;
+    stage = 'topic';
+  }
+
+  /** @param {any} t */
+  async function pickTopic(t) {
+    selectedTopic = t;
     topicLoading = true;
     topicHtml = '';
     try {
-      const res = await fetch(`${base}/topics/${topic.id}.md`);
+      const res = await fetch(`${base}/topics/${t.id}.md`);
       if (res.ok) {
         const md = await res.text();
         topicHtml = /** @type {string} */ (marked.parse(md));
@@ -53,295 +45,133 @@
         return;
       }
     } catch {}
-    topicHtml = `<p>${topic.detail}</p>`;
+    topicHtml = `<p>${t.detail}</p>`;
     topicLoading = false;
   }
 
-  $effect(() => {
-    if (selectedTopic) loadTopicMarkdown(selectedTopic);
-  });
-
-  const RADIUS_GENRE = 320;
-  const RADIUS_TOPIC = 200;
-
-  // d3-force 模擬：每次切換 stage 時重啟，讓泡泡動態尋找新平衡
-  /** @type {any} */
-  let simulation = null;
-  /** @type {any[]} */
-  let simNodes = [];
-  /** @type {any[]} */
-  let simLinks = [];
-
-  function targetLayout() {
-    /** @type {Array<{id:string, _type:'root'|'genre'|'topic', _data:any, _state?:string, tx:number, ty:number}>} */
-    const out = [];
-    /** @type {Array<{source:string, target:string}>} */
-    const links = [];
-
-    // root
-    out.push({
-      id: data.root.id,
-      _type: 'root',
-      _data: { label: data.root.label, _root: true, _focus: stage === 1, _dim: stage > 1 },
-      tx: 0,
-      ty: 0
-    });
-
-    if (stage === 1) return { items: out, links };
-
-    // genres 環狀
-    data.genres.forEach((g, i) => {
-      const angle = (i / data.genres.length) * Math.PI * 2 - Math.PI / 2;
-      const isActive = g.id === selectedGenre;
-      const r =
-        stage === 3
-          ? isActive
-            ? RADIUS_GENRE * 0.78
-            : RADIUS_GENRE * 1.45
-          : RADIUS_GENRE;
-      const stateName =
-        stage === 3 ? (isActive ? 'active' : 'dimmed') : 'normal';
-      out.push({
-        id: g.id,
-        _type: 'genre',
-        _data: { label: g.label, _genre: g, _state: stateName },
-        tx: Math.cos(angle) * r,
-        ty: Math.sin(angle) * r
-      });
-      links.push({ source: 'root', target: g.id });
-    });
-
-    // topics 圍繞 active genre，方向遠離 root
-    if (stage === 3 && selectedGenre) {
-      const active = out.find((n) => n.id === selectedGenre);
-      if (active) {
-        const cx = active.tx;
-        const cy = active.ty;
-        const angleAway = Math.atan2(cy, cx);
-        const genre = data.genres.find((g) => g.id === selectedGenre);
-        if (genre) {
-          const span = Math.PI * 1.05;
-          const start = angleAway - span / 2;
-          const denom = Math.max(1, genre.topics.length - 1);
-          genre.topics.forEach((t, i) => {
-            const a = start + (i / denom) * span;
-            out.push({
-              id: t.id,
-              _type: 'topic',
-              _data: { label: t.label, _topic: t, _color: genre.color },
-              tx: cx + Math.cos(a) * RADIUS_TOPIC,
-              ty: cy + Math.sin(a) * RADIUS_TOPIC
-            });
-            links.push({ source: selectedGenre, target: t.id });
-          });
-        }
-      }
-    }
-
-    return { items: out, links };
-  }
-
-  function buildEdges() {
-    const list = [];
-    if (stage === 1) return list;
-
-    for (const g of data.genres) {
-      list.push({
-        id: `e-root-${g.id}`,
-        source: 'root',
-        target: g.id,
-        animated: false,
-        style: edgeStyle(g.color, {
-          dim: stage === 3 && g.id !== selectedGenre,
-          strong: stage === 3 && g.id === selectedGenre
-        }),
-        className:
-          stage === 2
-            ? 'edge-grow'
-            : g.id === selectedGenre
-            ? 'edge-flow'
-            : ''
-      });
-    }
-    if (stage === 3 && selectedGenre) {
-      const genre = data.genres.find((g) => g.id === selectedGenre);
-      if (genre) {
-        for (const t of genre.topics) {
-          list.push({
-            id: `e-${selectedGenre}-${t.id}`,
-            source: selectedGenre,
-            target: t.id,
-            animated: false,
-            style: edgeStyle(genre.color, { strong: true }),
-            className: 'edge-grow edge-flow'
-          });
-        }
-      }
-    }
-    return list;
-  }
-
-  /**
-   * @param {string} color
-   * @param {{dim?:boolean, strong?:boolean}} [opts]
-   */
-  function edgeStyle(color, opts = {}) {
-    const { dim = false, strong = false } = opts;
-    const stroke = dim ? '#3f3f5a' : color;
-    const width = strong ? 2 : 1.4;
-    const opacity = dim ? 0.18 : strong ? 0.9 : 0.6;
-    return `stroke:${stroke};stroke-width:${width};opacity:${opacity};filter:drop-shadow(0 0 ${dim ? 0 : 4}px ${color}aa);`;
-  }
-
-  function rebuild() {
-    const { items, links } = targetLayout();
-
-    // d3-force 用：保留前次模擬節點的 x/y 作為起始（順滑過渡）
-    /** @type {Map<string, any>} */
-    const prev = new Map(simNodes.map((n) => [n.id, n]));
-
-    simNodes = items.map((it) => {
-      const p = prev.get(it.id);
-      return {
-        id: it.id,
-        _type: it._type,
-        _data: it._data,
-        tx: it.tx,
-        ty: it.ty,
-        x: p ? p.x : it.tx + (Math.random() - 0.5) * 12,
-        y: p ? p.y : it.ty + (Math.random() - 0.5) * 12,
-        vx: p ? p.vx : 0,
-        vy: p ? p.vy : 0
-      };
-    });
-    simLinks = links;
-
-    if (simulation) simulation.stop();
-    simulation = forceSimulation(simNodes)
-      .force(
-        'link',
-        forceLink(simLinks)
-          .id((/** @type {any} */ d) => d.id)
-          .distance((/** @type {any} */ l) =>
-            typeof l.source === 'object' && l.source.id === 'root' ? 300 : 190
-          )
-          .strength(0.15)
-      )
-      .force('charge', forceManyBody().strength(-260))
-      .force(
-        'x',
-        forceX((/** @type {any} */ d) => d.tx).strength(0.35)
-      )
-      .force(
-        'y',
-        forceY((/** @type {any} */ d) => d.ty).strength(0.35)
-      )
-      .force('collide', forceCollide(56))
-      .alpha(1)
-      .alphaDecay(0.025)
-      .alphaMin(0.005)
-      .on('tick', () => {
-        nodes.set(
-          simNodes.map((n) => ({
-            id: n.id,
-            type: n._type,
-            data: n._data,
-            position: { x: n.x, y: n.y },
-            draggable: false,
-            selectable: true
-          }))
-        );
-      });
-
-    edges.set(buildEdges());
-  }
-
-  /** @param {any} param */
-  function handleNodeClick({ detail }) {
-    const node = detail.node;
-    if (node.data._root) {
-      if (stage === 1) {
-        stage = 2;
-      } else {
-        stage = 1;
-        selectedGenre = null;
-        selectedTopic = null;
-      }
-      rebuild();
-      return;
-    }
-    if (node.data._genre) {
-      if (selectedGenre === node.id) {
-        stage = 2;
-        selectedGenre = null;
-        selectedTopic = null;
-      } else {
-        stage = 3;
-        selectedGenre = node.id;
-        selectedTopic = null;
-      }
-      rebuild();
-      return;
-    }
-    if (node.data._topic) {
-      selectedTopic = node.data._topic;
-      stage = 4;
-    }
+  function backToGenres() {
+    selectedGenre = null;
+    selectedTopic = null;
+    stage = 'genre';
   }
 
   function closeTopic() {
     selectedTopic = null;
-    stage = selectedGenre ? 3 : 2;
   }
 
-  onMount(() => {
-    rebuild();
-  });
-
-  onDestroy(() => {
-    if (simulation) simulation.stop();
-  });
+  const question = $derived(
+    stage === 'genre'
+      ? '你想做什麼類型的遊戲？'
+      : selectedGenre
+      ? `${selectedGenre.label}　中，你想學哪個面向？`
+      : ''
+  );
 </script>
 
 <svelte:head>
   <title>遊戲設計學習</title>
 </svelte:head>
 
+<svelte:window
+  onkeydown={(e) => {
+    if (e.key !== 'Escape') return;
+    if (selectedTopic) closeTopic();
+    else if (stage === 'topic') backToGenres();
+  }}
+/>
+
 <main>
-  {#if stage === 1}
-    <div class="hint">點擊中央泡泡開始</div>
-  {:else if stage === 2}
-    <div class="hint">選擇一個遊戲類型</div>
+  <!-- 上方麵包屑/返回 -->
+  {#if stage === 'topic'}
+    <button class="back" onclick={backToGenres} transition:fade={{ duration: 200 }}>
+      <span class="arrow">←</span>
+      <span>重新選類型</span>
+    </button>
   {/if}
 
-  <div class="flow-wrap">
-    <SvelteFlow
-      {nodes}
-      {edges}
-      {nodeTypes}
-      fitView
-      fitViewOptions={{ padding: 0.28, duration: 600 }}
-      minZoom={0.25}
-      maxZoom={1.6}
-      nodesDraggable={false}
-      nodesConnectable={false}
-      panOnDrag={true}
-      proOptions={{ hideAttribution: true }}
-      on:nodeclick={handleNodeClick}
-    >
-      <Background patternColor="#1e1b4b" bgColor="#0a0a1f" gap={32} size={1} />
-      <FitController triggerKey={fitTrigger} />
-    </SvelteFlow>
+  <!-- 中央問題 -->
+  {#key question}
+    <h1 class="question" in:fly={{ y: -16, duration: 500, easing: cubicOut }}>
+      {question}
+    </h1>
+  {/key}
+
+  <!-- 提示 -->
+  <p class="hint">點擊任一泡泡選擇</p>
+
+  <!-- 泡泡群 -->
+  <div class="stage-area">
+    {#if stage === 'genre'}
+      {#each data.genres as g, i (g.id)}
+        {@const p = clusterPos(i, data.genres.length)}
+        <button
+          class="bubble genre-bubble"
+          style="--x:{p.x}px; --y:{p.y}px; --c:{g.color}; --i:{i};"
+          onclick={() => pickGenre(g)}
+          in:scale={{
+            start: 0.2,
+            duration: 600,
+            delay: 80 + i * 60,
+            easing: cubicOut
+          }}
+          out:scale={{ start: 0.4, duration: 350, easing: cubicInOut }}
+        >
+          <GenreIcon id={g.id} />
+          <span class="label">{g.label}</span>
+        </button>
+      {/each}
+    {:else if stage === 'topic' && selectedGenre}
+      <!-- 中心保留所選類型，當作上下文錨點 -->
+      <div
+        class="bubble genre-bubble center-anchor"
+        style="--c:{selectedGenre.color};"
+        in:scale={{ start: 0.6, duration: 500, easing: cubicOut }}
+      >
+        <GenreIcon id={selectedGenre.id} />
+        <span class="label">{selectedGenre.label}</span>
+      </div>
+
+      {#each selectedGenre.topics as t, i (t.id)}
+        {@const p = clusterPos(i, selectedGenre.topics.length)}
+        <button
+          class="bubble topic-bubble"
+          style="--x:{p.x}px; --y:{p.y}px; --c:{selectedGenre.color}; --i:{i};"
+          onclick={() => pickTopic(t)}
+          in:scale={{
+            start: 0.2,
+            duration: 550,
+            delay: 200 + i * 90,
+            easing: cubicOut
+          }}
+          out:scale={{ start: 0.4, duration: 300, easing: cubicInOut }}
+        >
+          <span class="dot"></span>
+          <span class="label">{t.label}</span>
+        </button>
+      {/each}
+    {/if}
   </div>
 
+  <!-- 教材面板 -->
   {#if selectedTopic}
-    <div class="hud-panel" role="region" aria-label="設計面向詳情">
-      <div class="hud-header" style="--accent: {selectedTopic._color || '#7dd3fc'};">
+    <div
+      class="hud-panel"
+      role="region"
+      aria-label="設計面向詳情"
+      transition:fly={{ x: 40, duration: 450, easing: cubicOut }}
+    >
+      <div
+        class="hud-header"
+        style="--accent:{selectedGenre?.color || '#7dd3fc'};"
+      >
         <span class="hud-tag">設計面向</span>
         <button class="close" onclick={closeTopic} aria-label="關閉">×</button>
       </div>
       <h2>{selectedTopic.label}</h2>
-      <div class="hud-body" style="--accent: {selectedTopic._color || '#7dd3fc'};">
+      <div
+        class="hud-body"
+        style="--accent:{selectedGenre?.color || '#7dd3fc'};"
+      >
         {#if topicLoading}
           <p class="loading">載入中…</p>
         {:else}
@@ -352,8 +182,6 @@
     </div>
   {/if}
 </main>
-
-<svelte:window onkeydown={(e) => selectedTopic && e.key === 'Escape' && closeTopic()} />
 
 <style>
   :global(html, body) {
@@ -374,36 +202,220 @@
       radial-gradient(ellipse at 20% 20%, rgba(56,189,248,0.08), transparent 60%),
       radial-gradient(ellipse at 80% 80%, rgba(244,114,182,0.06), transparent 60%),
       #0a0a1f;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .question {
+    position: absolute;
+    top: 12%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0;
+    font-size: 26px;
+    font-weight: 500;
+    color: #f1f5f9;
+    letter-spacing: 0.08em;
+    text-align: center;
+    white-space: nowrap;
+    text-shadow: 0 0 24px rgba(125, 211, 252, 0.3);
+    z-index: 5;
   }
 
   .hint {
-    position: fixed;
-    top: 36px;
+    position: absolute;
+    top: calc(12% + 48px);
     left: 50%;
     transform: translateX(-50%);
-    z-index: 10;
-    font-size: 13px;
-    color: #94a3b8;
-    letter-spacing: 0.18em;
+    margin: 0;
+    font-size: 12px;
+    color: #64748b;
+    letter-spacing: 0.25em;
     pointer-events: none;
     animation: hint-pulse 2.4s ease-in-out infinite;
+    z-index: 5;
   }
 
   @keyframes hint-pulse {
-    0%, 100% { opacity: 0.45; }
-    50% { opacity: 0.95; }
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 0.85; }
   }
 
-  .flow-wrap { width: 100%; height: 100%; }
+  .back {
+    position: fixed;
+    top: 28px;
+    left: 28px;
+    background: rgba(15, 15, 40, 0.6);
+    border: 1px solid rgba(125, 211, 252, 0.25);
+    color: #cbd5e1;
+    padding: 9px 16px 9px 14px;
+    border-radius: 9999px;
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.25s ease;
+    z-index: 30;
+  }
+  .back:hover {
+    background: rgba(125, 211, 252, 0.12);
+    border-color: rgba(125, 211, 252, 0.5);
+    color: #fff;
+  }
+  .back .arrow { font-size: 16px; line-height: 1; }
 
+  .stage-area {
+    position: relative;
+    width: 0;
+    height: 0;
+  }
+
+  /* 泡泡基底 */
+  .bubble {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(calc(var(--x, 0px) - 50%), calc(var(--y, 0px) - 50%));
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    transition: transform 0.4s cubic-bezier(0.34,1.4,0.5,1), filter 0.3s, box-shadow 0.3s;
+    will-change: transform;
+    animation: bubble-float 6s ease-in-out infinite;
+    animation-delay: calc(var(--i, 0) * -1.1s);
+  }
+
+  @keyframes bubble-float {
+    0%, 100% { translate: 0 0; }
+    50% { translate: 0 -6px; }
+  }
+
+  .bubble .label {
+    color: inherit;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: 0.04em;
+    line-height: 1;
+    pointer-events: none;
+  }
+
+  /* 類型泡泡：圓形大球，內含 icon + 標籤 */
+  .genre-bubble {
+    width: 130px;
+    height: 130px;
+    border-radius: 50%;
+    background: radial-gradient(
+      circle at 30% 28%,
+      color-mix(in srgb, var(--c) 95%, white 12%) 0%,
+      color-mix(in srgb, var(--c) 80%, black 8%) 65%,
+      color-mix(in srgb, var(--c) 55%, black 30%) 100%
+    );
+    color: #0a0a1f;
+    box-shadow:
+      0 0 0 4px color-mix(in srgb, var(--c) 12%, transparent),
+      0 0 32px color-mix(in srgb, var(--c) 65%, transparent),
+      inset 0 2px 6px rgba(255, 255, 255, 0.4),
+      inset 0 -4px 12px rgba(0, 0, 0, 0.15);
+  }
+
+  .genre-bubble:hover {
+    transform: translate(calc(var(--x, 0px) - 50%), calc(var(--y, 0px) - 50%)) scale(1.08);
+    box-shadow:
+      0 0 0 6px color-mix(in srgb, var(--c) 18%, transparent),
+      0 0 56px color-mix(in srgb, var(--c) 90%, transparent),
+      inset 0 2px 6px rgba(255, 255, 255, 0.55),
+      inset 0 -4px 12px rgba(0, 0, 0, 0.18);
+    filter: brightness(1.1);
+  }
+
+  .genre-bubble :global(.icon) {
+    width: 36px;
+    height: 36px;
+    color: #0a0a1f;
+    opacity: 0.92;
+  }
+
+  .center-anchor {
+    --x: 0px;
+    --y: 0px;
+    width: 105px;
+    height: 105px;
+    pointer-events: none;
+    cursor: default;
+    opacity: 0.85;
+    animation: bubble-float 5s ease-in-out infinite;
+  }
+  .center-anchor :global(.icon) { width: 28px; height: 28px; }
+  .center-anchor .label { font-size: 12px; }
+
+  /* 面向泡泡：較小，深色玻璃感 */
+  .topic-bubble {
+    width: 130px;
+    height: 130px;
+    border-radius: 50%;
+    background: radial-gradient(
+      circle at 30% 28%,
+      rgba(15, 15, 40, 0.95) 0%,
+      rgba(15, 15, 40, 0.75) 100%
+    );
+    color: var(--c);
+    border: 1.5px solid color-mix(in srgb, var(--c) 65%, transparent);
+    box-shadow:
+      0 0 28px color-mix(in srgb, var(--c) 35%, transparent),
+      inset 0 0 18px color-mix(in srgb, var(--c) 12%, transparent);
+    backdrop-filter: blur(6px);
+  }
+
+  .topic-bubble:hover {
+    transform: translate(calc(var(--x, 0px) - 50%), calc(var(--y, 0px) - 50%)) scale(1.08);
+    box-shadow:
+      0 0 48px color-mix(in srgb, var(--c) 60%, transparent),
+      inset 0 0 22px color-mix(in srgb, var(--c) 20%, transparent);
+    border-color: var(--c);
+  }
+
+  .topic-bubble .label {
+    font-size: 13px;
+    text-align: center;
+    padding: 0 12px;
+    line-height: 1.35;
+    color: var(--c);
+    text-shadow: 0 0 10px color-mix(in srgb, var(--c) 50%, transparent);
+  }
+
+  .topic-bubble .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--c);
+    box-shadow: 0 0 12px var(--c);
+    animation: dot-pulse 1.8s ease-in-out infinite;
+  }
+  @keyframes dot-pulse {
+    0%, 100% { opacity: 0.6; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.3); }
+  }
+
+  /* HUD 面板（同前） */
   .hud-panel {
     position: fixed;
     top: 24px;
     right: 24px;
     bottom: 24px;
-    width: 420px;
+    width: 440px;
     max-width: calc(100vw - 48px);
-    background: rgba(15, 15, 40, 0.78);
+    background: rgba(15, 15, 40, 0.82);
     backdrop-filter: blur(18px);
     -webkit-backdrop-filter: blur(18px);
     border: 1px solid rgba(125, 211, 252, 0.25);
@@ -415,7 +427,6 @@
       0 0 0 1px rgba(125, 211, 252, 0.08),
       inset 0 1px 0 rgba(255, 255, 255, 0.04);
     z-index: 50;
-    animation: slide-in 0.5s cubic-bezier(0.34, 1.2, 0.5, 1);
     display: flex;
     flex-direction: column;
   }
@@ -435,7 +446,6 @@
     padding: 4px 10px;
     border: 1px solid var(--accent);
     border-radius: 999px;
-    opacity: 0.85;
     box-shadow: 0 0 12px var(--accent);
   }
 
@@ -444,7 +454,6 @@
     font-size: 24px;
     font-weight: 600;
     color: #f8fafc;
-    letter-spacing: 0.02em;
     line-height: 1.3;
   }
 
@@ -466,7 +475,6 @@
     letter-spacing: 0.04em;
     border-left: 3px solid var(--accent, #7dd3fc);
     padding-left: 10px;
-    line-height: 1.4;
   }
   .hud-body :global(h3) {
     font-size: 14px;
@@ -483,8 +491,7 @@
     color: #e0e7ff;
   }
   .hud-body :global(blockquote p) { margin: 0; }
-  .hud-body :global(ul),
-  .hud-body :global(ol) { padding-left: 20px; margin: 0 0 14px; }
+  .hud-body :global(ul), .hud-body :global(ol) { padding-left: 20px; margin: 0 0 14px; }
   .hud-body :global(li) { margin: 4px 0; }
   .hud-body :global(strong) { color: #fef3c7; font-weight: 600; }
   .hud-body :global(em) { color: #f5d0fe; font-style: normal; }
@@ -511,8 +518,7 @@
     margin: 0 0 14px;
     font-size: 13px;
   }
-  .hud-body :global(th),
-  .hud-body :global(td) {
+  .hud-body :global(th), .hud-body :global(td) {
     padding: 8px 10px;
     border: 1px solid rgba(125, 211, 252, 0.15);
     text-align: left;
@@ -520,7 +526,6 @@
   .hud-body :global(th) { background: rgba(125, 211, 252, 0.08); color: #f1f5f9; font-weight: 600; }
   .hud-body :global(hr) { border: none; border-top: 1px solid rgba(125, 211, 252, 0.15); margin: 18px 0; }
   .hud-body :global(a) { color: var(--accent, #7dd3fc); }
-  .hud-body :global(input[type="checkbox"]) { accent-color: var(--accent, #7dd3fc); margin-right: 6px; }
 
   .loading {
     color: #64748b;
@@ -559,36 +564,4 @@
     transition: all 0.2s;
   }
   .close:hover { background: rgba(148, 163, 184, 0.15); border-color: rgba(148, 163, 184, 0.6); color: #fff; }
-
-  @keyframes slide-in {
-    from { opacity: 0; transform: translateX(40px); }
-    to { opacity: 1; transform: translateX(0); }
-  }
-
-  :global(.svelte-flow) { background: transparent !important; }
-
-  :global(.svelte-flow__edge-path) {
-    transition: stroke 0.4s, stroke-width 0.4s, opacity 0.4s;
-  }
-
-  :global(.svelte-flow__edge.edge-grow .svelte-flow__edge-path) {
-    stroke-dasharray: 600;
-    stroke-dashoffset: 600;
-    animation: edge-grow 700ms cubic-bezier(0.5, 0, 0.2, 1) forwards;
-  }
-  @keyframes edge-grow { to { stroke-dashoffset: 0; } }
-
-  :global(.svelte-flow__edge.edge-flow .svelte-flow__edge-path) {
-    stroke-dasharray: 6 10;
-    animation: edge-flow 1.6s linear infinite;
-  }
-  :global(.svelte-flow__edge.edge-grow.edge-flow .svelte-flow__edge-path) {
-    animation:
-      edge-grow 700ms cubic-bezier(0.5, 0, 0.2, 1) forwards,
-      edge-flow 1.6s linear 700ms infinite;
-  }
-  @keyframes edge-flow {
-    from { stroke-dashoffset: 0; }
-    to { stroke-dashoffset: -32; }
-  }
 </style>
