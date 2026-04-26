@@ -8,25 +8,31 @@
   const nodes = writable([]);
   const edges = writable([]);
 
+  // 四幕：1=只有總領, 2=展開類型, 3=展開類型內面向, 4=面向詳情面板
+  let stage = $state(1);
   let selectedGenre = $state(null);
   let selectedTopic = $state(null);
 
   const RADIUS_GENRE = 320;
   const RADIUS_TOPIC = 200;
 
-  function rootStyle(dim = false) {
+  function rootStyle({ focus = false, dim = false } = {}) {
+    const size = focus ? '22px 36px' : dim ? '14px 22px' : '20px 32px';
+    const fontSize = focus ? '17px' : dim ? '13px' : '16px';
     return `
-      background:#ffffff;
-      color:#1f2937;
-      border:1px solid #e5e7eb;
+      background:radial-gradient(circle at 30% 30%, #ffffff 0%, #e0f2fe 60%, #bae6fd 100%);
+      color:#0c4a6e;
+      border:1.5px solid #7dd3fc;
       border-radius:9999px;
-      padding:${dim ? '14px 22px' : '20px 32px'};
-      font-weight:500;
-      font-size:${dim ? '13px' : '16px'};
-      letter-spacing:0.02em;
-      box-shadow:0 4px 24px rgba(15,23,42,0.06);
-      opacity:${dim ? 0.5 : 1};
-      transition:all 0.4s cubic-bezier(0.4,0,0.2,1);
+      padding:${size};
+      font-weight:600;
+      font-size:${fontSize};
+      letter-spacing:0.04em;
+      cursor:pointer;
+      box-shadow:0 0 0 6px rgba(125,211,252,0.12), 0 0 32px rgba(125,211,252,0.55), inset 0 1px 2px rgba(255,255,255,0.8);
+      opacity:${dim ? 0.45 : 1};
+      transform:scale(${focus ? 1.05 : 1});
+      transition:all 0.5s cubic-bezier(0.34,1.3,0.5,1);
     `.replace(/\s+/g, '');
   }
 
@@ -34,49 +40,71 @@
     const isActive = state === 'active';
     const isDimmed = state === 'dimmed';
     return `
-      background:#ffffff;
-      color:${isDimmed ? '#9ca3af' : color};
-      border:1.5px solid ${isDimmed ? '#e5e7eb' : color}${isActive ? '' : '99'};
+      background:radial-gradient(circle at 30% 25%, ${color}ff 0%, ${color}cc 70%, ${color}88 100%);
+      color:#0a0a1f;
+      border:1.5px solid ${color};
       border-radius:9999px;
-      padding:14px 24px;
-      font-weight:500;
+      padding:14px 26px;
+      font-weight:600;
       font-size:14px;
-      letter-spacing:0.02em;
+      letter-spacing:0.04em;
       cursor:pointer;
-      box-shadow:${isActive ? `0 6px 28px ${color}55` : '0 2px 12px rgba(15,23,42,0.05)'};
-      opacity:${isDimmed ? 0.4 : 1};
-      transform:scale(${isActive ? 1.06 : 1});
-      transition:all 0.4s cubic-bezier(0.4,0,0.2,1);
+      box-shadow:${isActive
+        ? `0 0 0 8px ${color}22, 0 0 48px ${color}cc, inset 0 1px 2px rgba(255,255,255,0.5)`
+        : isDimmed
+        ? `0 0 12px ${color}33`
+        : `0 0 0 4px ${color}1a, 0 0 24px ${color}88, inset 0 1px 2px rgba(255,255,255,0.5)`};
+      opacity:${isDimmed ? 0.25 : 1};
+      transform:scale(${isActive ? 1.12 : isDimmed ? 0.92 : 1});
+      transition:all 0.55s cubic-bezier(0.34,1.4,0.5,1);
     `.replace(/\s+/g, '');
   }
 
   function topicStyle(color) {
     return `
-      background:#ffffff;
-      color:#374151;
-      border:1px solid ${color}66;
+      background:rgba(15,15,40,0.85);
+      color:${color};
+      border:1.5px solid ${color}aa;
       border-radius:14px;
-      padding:11px 18px;
-      font-weight:400;
+      padding:11px 20px;
+      font-weight:500;
       font-size:13px;
+      letter-spacing:0.03em;
       cursor:pointer;
-      box-shadow:0 2px 10px rgba(15,23,42,0.04);
+      backdrop-filter:blur(6px);
+      box-shadow:0 0 20px ${color}55, inset 0 0 12px ${color}1a;
       transition:all 0.3s ease;
     `.replace(/\s+/g, '');
   }
 
   function edgeStyle(color, opts = {}) {
     const { dim = false, strong = false } = opts;
-    return `stroke:${dim ? '#d1d5db' : color};stroke-width:${strong ? 1.6 : 1};opacity:${dim ? 0.3 : 0.55};`;
+    const stroke = dim ? '#3f3f5a' : color;
+    const width = strong ? 2 : 1.4;
+    const opacity = dim ? 0.18 : strong ? 0.85 : 0.6;
+    return `stroke:${stroke};stroke-width:${width};opacity:${opacity};filter:drop-shadow(0 0 ${dim ? 0 : 4}px ${color}aa);`;
   }
 
-  function buildBaseGraph() {
+  function buildAct1() {
+    nodes.set([
+      {
+        id: data.root.id,
+        type: 'default',
+        data: { label: data.root.label, _root: true },
+        position: { x: 0, y: 0 },
+        style: rootStyle({ focus: true })
+      }
+    ]);
+    edges.set([]);
+  }
+
+  function buildAct2() {
     const root = {
       id: data.root.id,
       type: 'default',
-      data: { label: data.root.label },
+      data: { label: data.root.label, _root: true },
       position: { x: 0, y: 0 },
-      style: rootStyle(false)
+      style: rootStyle({ dim: true })
     };
 
     const genreNodes = data.genres.map((g, i) => {
@@ -98,45 +126,38 @@
       source: 'root',
       target: g.id,
       animated: false,
-      style: edgeStyle(g.color)
+      style: edgeStyle(g.color),
+      className: 'edge-grow'
     }));
 
     nodes.set([root, ...genreNodes]);
     edges.set(genreEdges);
   }
 
-  function expandGenre(genreId) {
+  function buildAct3(genreId) {
     const genre = data.genres.find((g) => g.id === genreId);
     if (!genre) return;
-
-    if (selectedGenre === genreId) {
-      selectedGenre = null;
-      selectedTopic = null;
-      buildBaseGraph();
-      return;
-    }
-
-    selectedGenre = genreId;
-    selectedTopic = null;
 
     const root = {
       id: data.root.id,
       type: 'default',
-      data: { label: data.root.label },
+      data: { label: data.root.label, _root: true },
       position: { x: 0, y: 0 },
-      style: rootStyle(true)
+      style: rootStyle({ dim: true })
     };
 
+    const SCATTER = 1.45;
     const genreNodes = data.genres.map((g, i) => {
       const angle = (i / data.genres.length) * Math.PI * 2 - Math.PI / 2;
       const isActive = g.id === genreId;
+      const r = isActive ? RADIUS_GENRE * 0.78 : RADIUS_GENRE * SCATTER;
       return {
         id: g.id,
         type: 'default',
         data: { label: g.label, _genre: g },
         position: {
-          x: Math.cos(angle) * RADIUS_GENRE,
-          y: Math.sin(angle) * RADIUS_GENRE
+          x: Math.cos(angle) * r,
+          y: Math.sin(angle) * r
         },
         style: genreStyle(g.color, isActive ? 'active' : 'dimmed')
       };
@@ -145,12 +166,13 @@
     const activeNode = genreNodes.find((n) => n.id === genreId);
     const cx = activeNode.position.x;
     const cy = activeNode.position.y;
-    const angleToRoot = Math.atan2(-cy, -cx);
+    const angleAwayFromRoot = Math.atan2(cy, cx);
 
     const topicNodes = genre.topics.map((t, i) => {
-      const span = Math.PI * 1.2;
-      const startAngle = angleToRoot + Math.PI - span / 2;
-      const angle = startAngle + (i / Math.max(1, genre.topics.length - 1)) * span;
+      const span = Math.PI * 1.05;
+      const startAngle = angleAwayFromRoot - span / 2;
+      const denom = Math.max(1, genre.topics.length - 1);
+      const angle = startAngle + (i / denom) * span;
       return {
         id: t.id,
         type: 'default',
@@ -175,8 +197,9 @@
       id: `e-${genreId}-${t.id}`,
       source: genreId,
       target: t.id,
-      animated: true,
-      style: edgeStyle(genre.color, { strong: true })
+      animated: false,
+      style: edgeStyle(genre.color, { strong: true }),
+      className: 'edge-grow'
     }));
 
     nodes.set([root, ...genreNodes, ...topicNodes]);
@@ -185,15 +208,45 @@
 
   function handleNodeClick({ detail }) {
     const node = detail.node;
+    if (node.data._root) {
+      if (stage === 1) {
+        stage = 2;
+        buildAct2();
+      } else {
+        stage = 1;
+        selectedGenre = null;
+        selectedTopic = null;
+        buildAct1();
+      }
+      return;
+    }
     if (node.data._genre) {
-      expandGenre(node.id);
-    } else if (node.data._topic) {
+      if (selectedGenre === node.id) {
+        stage = 2;
+        selectedGenre = null;
+        selectedTopic = null;
+        buildAct2();
+      } else {
+        stage = 3;
+        selectedGenre = node.id;
+        selectedTopic = null;
+        buildAct3(node.id);
+      }
+      return;
+    }
+    if (node.data._topic) {
       selectedTopic = node.data._topic;
+      stage = 4;
     }
   }
 
+  function closeTopic() {
+    selectedTopic = null;
+    stage = selectedGenre ? 3 : 2;
+  }
+
   onMount(() => {
-    buildBaseGraph();
+    buildAct1();
   });
 </script>
 
@@ -202,49 +255,46 @@
 </svelte:head>
 
 <main>
-  <div class="hint" class:hidden={selectedGenre}>
-    點擊任一類型開始探索
-  </div>
+  {#if stage === 1}
+    <div class="hint">點擊中央泡泡開始</div>
+  {:else if stage === 2}
+    <div class="hint">選擇一個遊戲類型</div>
+  {/if}
 
   <div class="flow-wrap">
     <SvelteFlow
       {nodes}
       {edges}
       fitView
-      fitViewOptions={{ padding: 0.25 }}
-      minZoom={0.4}
+      fitViewOptions={{ padding: 0.3, duration: 600 }}
+      minZoom={0.3}
       maxZoom={1.6}
       nodesDraggable={false}
       nodesConnectable={false}
-      elementsSelectable={true}
       panOnDrag={true}
       proOptions={{ hideAttribution: true }}
       on:nodeclick={handleNodeClick}
     >
-      <Background patternColor="#f1f5f9" bgColor="#fafafa" gap={28} size={1.2} />
+      <Background patternColor="#1e1b4b" bgColor="#0a0a1f" gap={32} size={1} />
     </SvelteFlow>
   </div>
 
   {#if selectedTopic}
-    <div
-      class="detail-panel"
+    <aside
+      class="hud-panel"
       role="dialog"
-      aria-modal="true"
+      aria-modal="false"
       tabindex="-1"
-      onclick={() => (selectedTopic = null)}
-      onkeydown={(e) => e.key === 'Escape' && (selectedTopic = null)}
+      onkeydown={(e) => e.key === 'Escape' && closeTopic()}
     >
-      <div
-        class="detail-card"
-        role="document"
-        onclick={(e) => e.stopPropagation()}
-        onkeydown={(e) => e.stopPropagation()}
-      >
-        <button class="close" onclick={() => (selectedTopic = null)} aria-label="關閉">×</button>
-        <h2>{selectedTopic.label}</h2>
-        <p>{selectedTopic.detail}</p>
+      <div class="hud-header" style="--accent: {selectedTopic._color || '#7dd3fc'};">
+        <span class="hud-tag">設計面向</span>
+        <button class="close" onclick={closeTopic} aria-label="關閉">×</button>
       </div>
-    </div>
+      <h2>{selectedTopic.label}</h2>
+      <p>{selectedTopic.detail}</p>
+      <div class="hud-foot">按 ESC 或點擊 × 關閉</div>
+    </aside>
   {/if}
 </main>
 
@@ -252,8 +302,8 @@
   :global(html, body) {
     margin: 0;
     padding: 0;
-    background: #fafafa;
-    color: #1f2937;
+    background: #0a0a1f;
+    color: #e0e7ff;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC', sans-serif;
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
@@ -263,23 +313,28 @@
     width: 100vw;
     height: 100vh;
     position: relative;
+    background:
+      radial-gradient(ellipse at 20% 20%, rgba(56,189,248,0.08), transparent 60%),
+      radial-gradient(ellipse at 80% 80%, rgba(244,114,182,0.06), transparent 60%),
+      #0a0a1f;
   }
 
   .hint {
     position: fixed;
-    top: 32px;
+    top: 36px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 10;
     font-size: 13px;
-    color: #9ca3af;
-    letter-spacing: 0.05em;
+    color: #94a3b8;
+    letter-spacing: 0.18em;
     pointer-events: none;
-    transition: opacity 0.4s ease;
+    animation: hint-pulse 2.4s ease-in-out infinite;
   }
 
-  .hint.hidden {
-    opacity: 0;
+  @keyframes hint-pulse {
+    0%, 100% { opacity: 0.45; }
+    50% { opacity: 0.95; }
   }
 
   .flow-wrap {
@@ -287,90 +342,132 @@
     height: 100%;
   }
 
-  .detail-panel {
+  .hud-panel {
     position: fixed;
-    inset: 0;
-    background: rgba(250, 250, 250, 0.65);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-    animation: fade 0.25s ease;
-  }
-
-  .detail-card {
-    position: relative;
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
+    top: 24px;
+    right: 24px;
+    bottom: 24px;
+    width: 420px;
+    max-width: calc(100vw - 48px);
+    background: rgba(15, 15, 40, 0.78);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(125, 211, 252, 0.25);
     border-radius: 18px;
-    padding: 40px 44px;
-    max-width: 520px;
-    width: 90%;
-    box-shadow: 0 20px 60px rgba(15, 23, 42, 0.08), 0 0 0 1px rgba(15, 23, 42, 0.02);
-    animation: pop 0.35s cubic-bezier(0.34, 1.4, 0.64, 1);
+    padding: 28px 30px;
+    color: #e0e7ff;
+    box-shadow:
+      0 20px 60px rgba(0, 0, 0, 0.5),
+      0 0 0 1px rgba(125, 211, 252, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    z-index: 50;
+    animation: slide-in 0.5s cubic-bezier(0.34, 1.2, 0.5, 1);
+    display: flex;
+    flex-direction: column;
   }
 
-  .detail-card h2 {
-    margin: 0 0 18px;
-    font-size: 22px;
+  .hud-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+  }
+
+  .hud-tag {
+    font-size: 11px;
+    letter-spacing: 0.25em;
+    color: var(--accent);
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    opacity: 0.85;
+    box-shadow: 0 0 12px var(--accent);
+  }
+
+  .hud-panel h2 {
+    margin: 0 0 16px;
+    font-size: 24px;
     font-weight: 600;
-    color: #111827;
-    letter-spacing: 0.01em;
+    color: #f8fafc;
+    letter-spacing: 0.02em;
+    line-height: 1.3;
   }
 
-  .detail-card p {
+  .hud-panel p {
     margin: 0;
-    line-height: 1.8;
-    color: #4b5563;
+    line-height: 1.85;
+    color: #cbd5e1;
     font-size: 15px;
+    flex: 1;
+  }
+
+  .hud-foot {
+    margin-top: 24px;
+    font-size: 11px;
+    color: #64748b;
+    letter-spacing: 0.2em;
+    border-top: 1px solid rgba(125, 211, 252, 0.12);
+    padding-top: 14px;
   }
 
   .close {
-    position: absolute;
-    top: 14px;
-    right: 18px;
     background: none;
-    border: none;
-    color: #9ca3af;
-    font-size: 26px;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    color: #cbd5e1;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    font-size: 20px;
     cursor: pointer;
     line-height: 1;
-    padding: 4px 10px;
-    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     transition: all 0.2s;
   }
 
   .close:hover {
-    background: #f3f4f6;
-    color: #4b5563;
+    background: rgba(148, 163, 184, 0.15);
+    border-color: rgba(148, 163, 184, 0.6);
+    color: #fff;
   }
 
-  @keyframes fade {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-
-  @keyframes pop {
-    from { opacity: 0; transform: scale(0.95) translateY(8px); }
-    to { opacity: 1; transform: scale(1) translateY(0); }
+  @keyframes slide-in {
+    from { opacity: 0; transform: translateX(40px); }
+    to { opacity: 1; transform: translateX(0); }
   }
 
   :global(.svelte-flow) {
-    background: #fafafa !important;
+    background: transparent !important;
   }
 
   :global(.svelte-flow__node) {
-    transition: transform 0.4s cubic-bezier(0.4,0,0.2,1);
+    transition: transform 0.5s cubic-bezier(0.34,1.4,0.5,1);
   }
 
   :global(.svelte-flow__node:hover) {
-    transform: translateY(-2px);
+    animation: bubble-pulse 1.2s ease-in-out infinite;
     z-index: 10;
+  }
+
+  @keyframes bubble-pulse {
+    0%, 100% { filter: brightness(1); }
+    50% { filter: brightness(1.18); }
   }
 
   :global(.svelte-flow__edge-path) {
     transition: stroke 0.4s, stroke-width 0.4s, opacity 0.4s;
+  }
+
+  /* 連線生長動畫：新增 className=edge-grow 的邊線會從父→子「長」出來 */
+  :global(.svelte-flow__edge.edge-grow .svelte-flow__edge-path) {
+    stroke-dasharray: 600;
+    stroke-dashoffset: 600;
+    animation: edge-grow 700ms cubic-bezier(0.5, 0, 0.2, 1) forwards;
+  }
+
+  @keyframes edge-grow {
+    to { stroke-dashoffset: 0; }
   }
 </style>
