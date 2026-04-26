@@ -1,0 +1,75 @@
+{
+  "root": {
+    "id": "root",
+    "label": "你想做什麼類型的遊戲？",
+    "description": "選一個類型開始探索設計面向"
+  },
+  "genres": [
+    {
+      "id": "rpg",
+      "label": "角色扮演 RPG",
+      "color": "#a78bfa",
+      "topics": [
+        { "id": "rpg-progression", "label": "成長系統", "detail": "等級、技能樹、裝備迭代——讓玩家感到角色變強的核心迴圈。" },
+        { "id": "rpg-narrative", "label": "敘事結構", "detail": "主線、支線、分歧結局；對話樹 vs 過場演出的取捨。" },
+        { "id": "rpg-combat", "label": "戰鬥節奏", "detail": "回合制 / ATB / 即時動作；資源管理與技能 cooldown 設計。" },
+        { "id": "rpg-world", "label": "世界探索", "detail": "地圖密度、興趣點分佈、迷路與引導的平衡。" }
+      ]
+    },
+    {
+      "id": "platformer",
+      "label": "平台跳躍",
+      "color": "#fb923c",
+      "topics": [
+        { "id": "plat-controls", "label": "手感與物理", "detail": "Coyote time、jump buffer、加速曲線——手感的微觀魔法。" },
+        { "id": "plat-level", "label": "關卡語言", "detail": "教學-變奏-組合-測驗 的四段式關卡設計法。" },
+        { "id": "plat-enemy", "label": "敵人設計", "detail": "每種敵人應對應一種玩家動詞，避免功能重複。" },
+        { "id": "plat-collect", "label": "收集物激勵", "detail": "金幣、星星、隱藏要素的密度與獎勵節奏。" }
+      ]
+    },
+    {
+      "id": "puzzle",
+      "label": "解謎",
+      "color": "#34d399",
+      "topics": [
+        { "id": "puz-mechanic", "label": "核心機制", "detail": "一個機制能延伸出多少變化？——機制深度的試金石。" },
+        { "id": "puz-progression", "label": "難度曲線", "detail": "Aha moment 之間的間隔；卡關時的提示策略。" },
+        { "id": "puz-aesthetic", "label": "美學一致性", "detail": "符號系統、色彩語義；解謎的視覺即規則。" },
+        { "id": "puz-narrative", "label": "敘事融合", "detail": "謎題本身敘事 vs 謎題之間插敘的兩種結構。" }
+      ]
+    },
+    {
+      "id": "rts",
+      "label": "即時戰略 RTS",
+      "color": "#60a5fa",
+      "topics": [
+        { "id": "rts-economy", "label": "經濟系統", "detail": "資源類型、採集速率、擴張誘因 vs 風險。" },
+        { "id": "rts-balance", "label": "兵種剋制", "detail": "石頭剪刀布只是起點；真正的平衡在組合與時機。" },
+        { "id": "rts-apm", "label": "操作負擔", "detail": "玩家應該忙在哪？決策 vs 執行的比重設計。" },
+        { "id": "rts-map", "label": "地圖結構", "detail": "資源點配置、視野阻擋、節奏控制的物理基礎。" }
+      ]
+    },
+    {
+      "id": "roguelike",
+      "label": "Roguelike",
+      "color": "#f472b6",
+      "topics": [
+        { "id": "rog-run", "label": "單局結構", "detail": "一場 run 的長度、節奏、結尾成就感如何設計。" },
+        { "id": "rog-meta", "label": "元進度", "detail": "死亡後永久解鎖 vs 純技術 progression 的取捨。" },
+        { "id": "rog-build", "label": "Build 構築", "detail": "隨機性 + 玩家選擇 = 每場不同卻有掌控感。" },
+        { "id": "rog-difficulty", "label": "難度與隨機", "detail": "區分『公平的難』與『運氣不好』——隨機設計的核心倫理。" }
+      ]
+    },
+    {
+      "id": "narrative",
+      "label": "敘事冒險",
+      "color": "#fbbf24",
+      "topics": [
+        { "id": "nar-choice", "label": "選擇與後果", "detail": "假選擇 vs 真分歧；玩家感知的『我做了選擇』比實際分支更重要。" },
+        { "id": "nar-pace", "label": "節奏控制", "detail": "互動 vs 觀看的比例；何時讓玩家行動、何時讓玩家感受。" },
+        { "id": "nar-character", "label": "角色塑造", "detail": "透過行動而非對白展現性格——遊戲特有的角色語言。" },
+        { "id": "nar-tone", "label": "氛圍調度", "detail": "音樂、光線、鏡頭——情緒由系統而非台詞傳達。" }
+      ]
+    }
+  ]
+}
