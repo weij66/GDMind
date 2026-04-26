@@ -1,13 +1,41 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { SvelteFlow, Background } from '@xyflow/svelte';
   import { writable } from 'svelte/store';
   import { base } from '$app/paths';
   import { marked } from 'marked';
+  import {
+    forceSimulation,
+    forceLink,
+    forceManyBody,
+    forceX,
+    forceY,
+    forceCollide
+  } from 'd3-force';
   import '@xyflow/svelte/dist/style.css';
   import data from '$lib/data/genres.json';
+  import RootNode from '$lib/RootNode.svelte';
+  import GenreNode from '$lib/GenreNode.svelte';
+  import TopicNode from '$lib/TopicNode.svelte';
+  import FitController from '$lib/FitController.svelte';
 
   marked.setOptions({ breaks: true, gfm: true });
+
+  const nodeTypes = { root: RootNode, genre: GenreNode, topic: TopicNode };
+
+  /** @type {import('svelte/store').Writable<any[]>} */
+  const nodes = writable([]);
+  /** @type {import('svelte/store').Writable<any[]>} */
+  const edges = writable([]);
+
+  // 四幕：1=只有總領, 2=展開類型, 3=展開類型內面向, 4=面向詳情面板
+  let stage = $state(1);
+  /** @type {string | null} */
+  let selectedGenre = $state(null);
+  /** @type {{id:string, label:string, detail:string, _color?:string} | null} */
+  let selectedTopic = $state(null);
+
+  const fitTrigger = $derived(`${stage}-${selectedGenre}`);
 
   let topicHtml = $state('');
   let topicLoading = $state(false);
@@ -29,18 +57,6 @@
     topicLoading = false;
   }
 
-  /** @type {import('svelte/store').Writable<any[]>} */
-  const nodes = writable([]);
-  /** @type {import('svelte/store').Writable<any[]>} */
-  const edges = writable([]);
-
-  // 四幕：1=只有總領, 2=展開類型, 3=展開類型內面向, 4=面向詳情面板
-  let stage = $state(1);
-  /** @type {string | null} */
-  let selectedGenre = $state(null);
-  /** @type {{id:string, label:string, detail:string, _color?:string} | null} */
-  let selectedTopic = $state(null);
-
   $effect(() => {
     if (selectedTopic) loadTopicMarkdown(selectedTopic);
   });
@@ -48,209 +64,210 @@
   const RADIUS_GENRE = 320;
   const RADIUS_TOPIC = 200;
 
-  function rootStyle({ focus = false, dim = false } = {}) {
-    const size = focus ? '22px 36px' : dim ? '14px 22px' : '20px 32px';
-    const fontSize = focus ? '17px' : dim ? '13px' : '16px';
-    return `
-      background:radial-gradient(circle at 30% 30%, #ffffff 0%, #e0f2fe 60%, #bae6fd 100%);
-      color:#0c4a6e;
-      border:1.5px solid #7dd3fc;
-      border-radius:9999px;
-      padding:${size};
-      font-weight:600;
-      font-size:${fontSize};
-      letter-spacing:0.04em;
-      cursor:pointer;
-      box-shadow:0 0 0 6px rgba(125,211,252,0.12), 0 0 32px rgba(125,211,252,0.55), inset 0 1px 2px rgba(255,255,255,0.8);
-      opacity:${dim ? 0.45 : 1};
-      transform:scale(${focus ? 1.05 : 1});
-      transition:all 0.5s cubic-bezier(0.34,1.3,0.5,1);
-    `.replace(/\s+/g, '');
+  // d3-force 模擬：每次切換 stage 時重啟，讓泡泡動態尋找新平衡
+  /** @type {any} */
+  let simulation = null;
+  /** @type {any[]} */
+  let simNodes = [];
+  /** @type {any[]} */
+  let simLinks = [];
+
+  function targetLayout() {
+    /** @type {Array<{id:string, _type:'root'|'genre'|'topic', _data:any, _state?:string, tx:number, ty:number}>} */
+    const out = [];
+    /** @type {Array<{source:string, target:string}>} */
+    const links = [];
+
+    // root
+    out.push({
+      id: data.root.id,
+      _type: 'root',
+      _data: { label: data.root.label, _root: true, _focus: stage === 1, _dim: stage > 1 },
+      tx: 0,
+      ty: 0
+    });
+
+    if (stage === 1) return { items: out, links };
+
+    // genres 環狀
+    data.genres.forEach((g, i) => {
+      const angle = (i / data.genres.length) * Math.PI * 2 - Math.PI / 2;
+      const isActive = g.id === selectedGenre;
+      const r =
+        stage === 3
+          ? isActive
+            ? RADIUS_GENRE * 0.78
+            : RADIUS_GENRE * 1.45
+          : RADIUS_GENRE;
+      const stateName =
+        stage === 3 ? (isActive ? 'active' : 'dimmed') : 'normal';
+      out.push({
+        id: g.id,
+        _type: 'genre',
+        _data: { label: g.label, _genre: g, _state: stateName },
+        tx: Math.cos(angle) * r,
+        ty: Math.sin(angle) * r
+      });
+      links.push({ source: 'root', target: g.id });
+    });
+
+    // topics 圍繞 active genre，方向遠離 root
+    if (stage === 3 && selectedGenre) {
+      const active = out.find((n) => n.id === selectedGenre);
+      if (active) {
+        const cx = active.tx;
+        const cy = active.ty;
+        const angleAway = Math.atan2(cy, cx);
+        const genre = data.genres.find((g) => g.id === selectedGenre);
+        if (genre) {
+          const span = Math.PI * 1.05;
+          const start = angleAway - span / 2;
+          const denom = Math.max(1, genre.topics.length - 1);
+          genre.topics.forEach((t, i) => {
+            const a = start + (i / denom) * span;
+            out.push({
+              id: t.id,
+              _type: 'topic',
+              _data: { label: t.label, _topic: t, _color: genre.color },
+              tx: cx + Math.cos(a) * RADIUS_TOPIC,
+              ty: cy + Math.sin(a) * RADIUS_TOPIC
+            });
+            links.push({ source: selectedGenre, target: t.id });
+          });
+        }
+      }
+    }
+
+    return { items: out, links };
   }
 
-  function genreStyle(color, state) {
-    const isActive = state === 'active';
-    const isDimmed = state === 'dimmed';
-    return `
-      background:radial-gradient(circle at 30% 25%, ${color}ff 0%, ${color}cc 70%, ${color}88 100%);
-      color:#0a0a1f;
-      border:1.5px solid ${color};
-      border-radius:9999px;
-      padding:14px 26px;
-      font-weight:600;
-      font-size:14px;
-      letter-spacing:0.04em;
-      cursor:pointer;
-      box-shadow:${isActive
-        ? `0 0 0 8px ${color}22, 0 0 48px ${color}cc, inset 0 1px 2px rgba(255,255,255,0.5)`
-        : isDimmed
-        ? `0 0 12px ${color}33`
-        : `0 0 0 4px ${color}1a, 0 0 24px ${color}88, inset 0 1px 2px rgba(255,255,255,0.5)`};
-      opacity:${isDimmed ? 0.25 : 1};
-      transform:scale(${isActive ? 1.12 : isDimmed ? 0.92 : 1});
-      transition:all 0.55s cubic-bezier(0.34,1.4,0.5,1);
-    `.replace(/\s+/g, '');
+  function buildEdges() {
+    const list = [];
+    if (stage === 1) return list;
+
+    for (const g of data.genres) {
+      list.push({
+        id: `e-root-${g.id}`,
+        source: 'root',
+        target: g.id,
+        animated: false,
+        style: edgeStyle(g.color, {
+          dim: stage === 3 && g.id !== selectedGenre,
+          strong: stage === 3 && g.id === selectedGenre
+        }),
+        className:
+          stage === 2
+            ? 'edge-grow'
+            : g.id === selectedGenre
+            ? 'edge-flow'
+            : ''
+      });
+    }
+    if (stage === 3 && selectedGenre) {
+      const genre = data.genres.find((g) => g.id === selectedGenre);
+      if (genre) {
+        for (const t of genre.topics) {
+          list.push({
+            id: `e-${selectedGenre}-${t.id}`,
+            source: selectedGenre,
+            target: t.id,
+            animated: false,
+            style: edgeStyle(genre.color, { strong: true }),
+            className: 'edge-grow edge-flow'
+          });
+        }
+      }
+    }
+    return list;
   }
 
-  function topicStyle(color) {
-    return `
-      background:rgba(15,15,40,0.85);
-      color:${color};
-      border:1.5px solid ${color}aa;
-      border-radius:14px;
-      padding:11px 20px;
-      font-weight:500;
-      font-size:13px;
-      letter-spacing:0.03em;
-      cursor:pointer;
-      backdrop-filter:blur(6px);
-      box-shadow:0 0 20px ${color}55, inset 0 0 12px ${color}1a;
-      transition:all 0.3s ease;
-    `.replace(/\s+/g, '');
-  }
-
+  /**
+   * @param {string} color
+   * @param {{dim?:boolean, strong?:boolean}} [opts]
+   */
   function edgeStyle(color, opts = {}) {
     const { dim = false, strong = false } = opts;
     const stroke = dim ? '#3f3f5a' : color;
     const width = strong ? 2 : 1.4;
-    const opacity = dim ? 0.18 : strong ? 0.85 : 0.6;
+    const opacity = dim ? 0.18 : strong ? 0.9 : 0.6;
     return `stroke:${stroke};stroke-width:${width};opacity:${opacity};filter:drop-shadow(0 0 ${dim ? 0 : 4}px ${color}aa);`;
   }
 
-  function buildAct1() {
-    nodes.set([
-      {
-        id: data.root.id,
-        type: 'default',
-        data: { label: data.root.label, _root: true },
-        position: { x: 0, y: 0 },
-        style: rootStyle({ focus: true })
-      }
-    ]);
-    edges.set([]);
-  }
+  function rebuild() {
+    const { items, links } = targetLayout();
 
-  function buildAct2() {
-    const root = {
-      id: data.root.id,
-      type: 'default',
-      data: { label: data.root.label, _root: true },
-      position: { x: 0, y: 0 },
-      style: rootStyle({ dim: true })
-    };
+    // d3-force 用：保留前次模擬節點的 x/y 作為起始（順滑過渡）
+    /** @type {Map<string, any>} */
+    const prev = new Map(simNodes.map((n) => [n.id, n]));
 
-    const genreNodes = data.genres.map((g, i) => {
-      const angle = (i / data.genres.length) * Math.PI * 2 - Math.PI / 2;
+    simNodes = items.map((it) => {
+      const p = prev.get(it.id);
       return {
-        id: g.id,
-        type: 'default',
-        data: { label: g.label, _genre: g },
-        position: {
-          x: Math.cos(angle) * RADIUS_GENRE,
-          y: Math.sin(angle) * RADIUS_GENRE
-        },
-        style: genreStyle(g.color, 'normal')
+        id: it.id,
+        _type: it._type,
+        _data: it._data,
+        tx: it.tx,
+        ty: it.ty,
+        x: p ? p.x : it.tx + (Math.random() - 0.5) * 12,
+        y: p ? p.y : it.ty + (Math.random() - 0.5) * 12,
+        vx: p ? p.vx : 0,
+        vy: p ? p.vy : 0
       };
     });
+    simLinks = links;
 
-    const genreEdges = data.genres.map((g) => ({
-      id: `e-root-${g.id}`,
-      source: 'root',
-      target: g.id,
-      animated: false,
-      style: edgeStyle(g.color),
-      className: 'edge-grow'
-    }));
+    if (simulation) simulation.stop();
+    simulation = forceSimulation(simNodes)
+      .force(
+        'link',
+        forceLink(simLinks)
+          .id((/** @type {any} */ d) => d.id)
+          .distance((/** @type {any} */ l) =>
+            typeof l.source === 'object' && l.source.id === 'root' ? 300 : 190
+          )
+          .strength(0.15)
+      )
+      .force('charge', forceManyBody().strength(-260))
+      .force(
+        'x',
+        forceX((/** @type {any} */ d) => d.tx).strength(0.35)
+      )
+      .force(
+        'y',
+        forceY((/** @type {any} */ d) => d.ty).strength(0.35)
+      )
+      .force('collide', forceCollide(56))
+      .alpha(1)
+      .alphaDecay(0.025)
+      .alphaMin(0.005)
+      .on('tick', () => {
+        nodes.set(
+          simNodes.map((n) => ({
+            id: n.id,
+            type: n._type,
+            data: n._data,
+            position: { x: n.x, y: n.y },
+            draggable: false,
+            selectable: true
+          }))
+        );
+      });
 
-    nodes.set([root, ...genreNodes]);
-    edges.set(genreEdges);
+    edges.set(buildEdges());
   }
 
-  function buildAct3(genreId) {
-    const genre = data.genres.find((g) => g.id === genreId);
-    if (!genre) return;
-
-    const root = {
-      id: data.root.id,
-      type: 'default',
-      data: { label: data.root.label, _root: true },
-      position: { x: 0, y: 0 },
-      style: rootStyle({ dim: true })
-    };
-
-    const SCATTER = 1.45;
-    const genreNodes = data.genres.map((g, i) => {
-      const angle = (i / data.genres.length) * Math.PI * 2 - Math.PI / 2;
-      const isActive = g.id === genreId;
-      const r = isActive ? RADIUS_GENRE * 0.78 : RADIUS_GENRE * SCATTER;
-      return {
-        id: g.id,
-        type: 'default',
-        data: { label: g.label, _genre: g },
-        position: {
-          x: Math.cos(angle) * r,
-          y: Math.sin(angle) * r
-        },
-        style: genreStyle(g.color, isActive ? 'active' : 'dimmed')
-      };
-    });
-
-    const activeNode = genreNodes.find((n) => n.id === genreId);
-    const cx = activeNode.position.x;
-    const cy = activeNode.position.y;
-    const angleAwayFromRoot = Math.atan2(cy, cx);
-
-    const topicNodes = genre.topics.map((t, i) => {
-      const span = Math.PI * 1.05;
-      const startAngle = angleAwayFromRoot - span / 2;
-      const denom = Math.max(1, genre.topics.length - 1);
-      const angle = startAngle + (i / denom) * span;
-      return {
-        id: t.id,
-        type: 'default',
-        data: { label: t.label, _topic: t, _color: genre.color },
-        position: {
-          x: cx + Math.cos(angle) * RADIUS_TOPIC,
-          y: cy + Math.sin(angle) * RADIUS_TOPIC
-        },
-        style: topicStyle(genre.color)
-      };
-    });
-
-    const baseEdges = data.genres.map((g) => ({
-      id: `e-root-${g.id}`,
-      source: 'root',
-      target: g.id,
-      animated: false,
-      style: edgeStyle(g.color, { dim: g.id !== genreId, strong: g.id === genreId }),
-      className: g.id === genreId ? 'edge-flow' : ''
-    }));
-
-    const topicEdges = genre.topics.map((t) => ({
-      id: `e-${genreId}-${t.id}`,
-      source: genreId,
-      target: t.id,
-      animated: false,
-      style: edgeStyle(genre.color, { strong: true }),
-      className: 'edge-grow edge-flow'
-    }));
-
-    nodes.set([root, ...genreNodes, ...topicNodes]);
-    edges.set([...baseEdges, ...topicEdges]);
-  }
-
+  /** @param {any} param */
   function handleNodeClick({ detail }) {
     const node = detail.node;
     if (node.data._root) {
       if (stage === 1) {
         stage = 2;
-        buildAct2();
       } else {
         stage = 1;
         selectedGenre = null;
         selectedTopic = null;
-        buildAct1();
       }
+      rebuild();
       return;
     }
     if (node.data._genre) {
@@ -258,13 +275,12 @@
         stage = 2;
         selectedGenre = null;
         selectedTopic = null;
-        buildAct2();
       } else {
         stage = 3;
         selectedGenre = node.id;
         selectedTopic = null;
-        buildAct3(node.id);
       }
+      rebuild();
       return;
     }
     if (node.data._topic) {
@@ -279,7 +295,11 @@
   }
 
   onMount(() => {
-    buildAct1();
+    rebuild();
+  });
+
+  onDestroy(() => {
+    if (simulation) simulation.stop();
   });
 </script>
 
@@ -298,9 +318,10 @@
     <SvelteFlow
       {nodes}
       {edges}
+      {nodeTypes}
       fitView
-      fitViewOptions={{ padding: 0.3, duration: 600 }}
-      minZoom={0.3}
+      fitViewOptions={{ padding: 0.28, duration: 600 }}
+      minZoom={0.25}
       maxZoom={1.6}
       nodesDraggable={false}
       nodesConnectable={false}
@@ -309,6 +330,7 @@
       on:nodeclick={handleNodeClick}
     >
       <Background patternColor="#1e1b4b" bgColor="#0a0a1f" gap={32} size={1} />
+      <FitController triggerKey={fitTrigger} />
     </SvelteFlow>
   </div>
 
@@ -319,7 +341,7 @@
         <button class="close" onclick={closeTopic} aria-label="關閉">×</button>
       </div>
       <h2>{selectedTopic.label}</h2>
-      <div class="hud-body">
+      <div class="hud-body" style="--accent: {selectedTopic._color || '#7dd3fc'};">
         {#if topicLoading}
           <p class="loading">載入中…</p>
         {:else}
@@ -330,6 +352,8 @@
     </div>
   {/if}
 </main>
+
+<svelte:window onkeydown={(e) => selectedTopic && e.key === 'Escape' && closeTopic()} />
 
 <style>
   :global(html, body) {
@@ -370,10 +394,7 @@
     50% { opacity: 0.95; }
   }
 
-  .flow-wrap {
-    width: 100%;
-    height: 100%;
-  }
+  .flow-wrap { width: 100%; height: 100%; }
 
   .hud-panel {
     position: fixed;
@@ -460,7 +481,6 @@
     background: rgba(125, 211, 252, 0.06);
     border-radius: 4px;
     color: #e0e7ff;
-    font-style: normal;
   }
   .hud-body :global(blockquote p) { margin: 0; }
   .hud-body :global(ul),
@@ -484,11 +504,7 @@
     overflow-x: auto;
     margin: 0 0 14px;
   }
-  .hud-body :global(pre code) {
-    background: none;
-    padding: 0;
-    color: #cbd5e1;
-  }
+  .hud-body :global(pre code) { background: none; padding: 0; color: #cbd5e1; }
   .hud-body :global(table) {
     width: 100%;
     border-collapse: collapse;
@@ -501,16 +517,8 @@
     border: 1px solid rgba(125, 211, 252, 0.15);
     text-align: left;
   }
-  .hud-body :global(th) {
-    background: rgba(125, 211, 252, 0.08);
-    color: #f1f5f9;
-    font-weight: 600;
-  }
-  .hud-body :global(hr) {
-    border: none;
-    border-top: 1px solid rgba(125, 211, 252, 0.15);
-    margin: 18px 0;
-  }
+  .hud-body :global(th) { background: rgba(125, 211, 252, 0.08); color: #f1f5f9; font-weight: 600; }
+  .hud-body :global(hr) { border: none; border-top: 1px solid rgba(125, 211, 252, 0.15); margin: 18px 0; }
   .hud-body :global(a) { color: var(--accent, #7dd3fc); }
   .hud-body :global(input[type="checkbox"]) { accent-color: var(--accent, #7dd3fc); margin-right: 6px; }
 
@@ -522,13 +530,9 @@
     margin-top: 40px;
   }
 
-  /* 自訂卷軸 */
   .hud-body::-webkit-scrollbar { width: 6px; }
   .hud-body::-webkit-scrollbar-track { background: transparent; }
-  .hud-body::-webkit-scrollbar-thumb {
-    background: rgba(125, 211, 252, 0.25);
-    border-radius: 3px;
-  }
+  .hud-body::-webkit-scrollbar-thumb { background: rgba(125, 211, 252, 0.25); border-radius: 3px; }
 
   .hud-foot {
     margin-top: 24px;
@@ -554,51 +558,26 @@
     justify-content: center;
     transition: all 0.2s;
   }
-
-  .close:hover {
-    background: rgba(148, 163, 184, 0.15);
-    border-color: rgba(148, 163, 184, 0.6);
-    color: #fff;
-  }
+  .close:hover { background: rgba(148, 163, 184, 0.15); border-color: rgba(148, 163, 184, 0.6); color: #fff; }
 
   @keyframes slide-in {
     from { opacity: 0; transform: translateX(40px); }
     to { opacity: 1; transform: translateX(0); }
   }
 
-  :global(.svelte-flow) {
-    background: transparent !important;
-  }
-
-  :global(.svelte-flow__node) {
-    transition: transform 0.5s cubic-bezier(0.34,1.4,0.5,1);
-  }
-
-  :global(.svelte-flow__node:hover) {
-    animation: bubble-pulse 1.2s ease-in-out infinite;
-    z-index: 10;
-  }
-
-  @keyframes bubble-pulse {
-    0%, 100% { filter: brightness(1); }
-    50% { filter: brightness(1.18); }
-  }
+  :global(.svelte-flow) { background: transparent !important; }
 
   :global(.svelte-flow__edge-path) {
     transition: stroke 0.4s, stroke-width 0.4s, opacity 0.4s;
   }
 
-  /* 連線生長動畫：新增 className=edge-grow 的邊線會從父→子「長」出來 */
   :global(.svelte-flow__edge.edge-grow .svelte-flow__edge-path) {
     stroke-dasharray: 600;
     stroke-dashoffset: 600;
     animation: edge-grow 700ms cubic-bezier(0.5, 0, 0.2, 1) forwards;
   }
-  @keyframes edge-grow {
-    to { stroke-dashoffset: 0; }
-  }
+  @keyframes edge-grow { to { stroke-dashoffset: 0; } }
 
-  /* 連線能量流動：edge-flow 類別的邊線持續流動，模擬資訊流 */
   :global(.svelte-flow__edge.edge-flow .svelte-flow__edge-path) {
     stroke-dasharray: 6 10;
     animation: edge-flow 1.6s linear infinite;
