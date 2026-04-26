@@ -1,11 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import {
-    SvelteFlow,
-    Background,
-    Controls,
-    MiniMap
-  } from '@xyflow/svelte';
+  import { SvelteFlow, Background } from '@xyflow/svelte';
   import { writable } from 'svelte/store';
   import '@xyflow/svelte/dist/style.css';
   import data from '$lib/data/genres.json';
@@ -16,8 +11,64 @@
   let selectedGenre = $state(null);
   let selectedTopic = $state(null);
 
-  const RADIUS_GENRE = 280;
-  const RADIUS_TOPIC = 180;
+  const RADIUS_GENRE = 320;
+  const RADIUS_TOPIC = 200;
+
+  function rootStyle(dim = false) {
+    return `
+      background:#ffffff;
+      color:#1f2937;
+      border:1px solid #e5e7eb;
+      border-radius:9999px;
+      padding:${dim ? '14px 22px' : '20px 32px'};
+      font-weight:500;
+      font-size:${dim ? '13px' : '16px'};
+      letter-spacing:0.02em;
+      box-shadow:0 4px 24px rgba(15,23,42,0.06);
+      opacity:${dim ? 0.5 : 1};
+      transition:all 0.4s cubic-bezier(0.4,0,0.2,1);
+    `.replace(/\s+/g, '');
+  }
+
+  function genreStyle(color, state) {
+    const isActive = state === 'active';
+    const isDimmed = state === 'dimmed';
+    return `
+      background:#ffffff;
+      color:${isDimmed ? '#9ca3af' : color};
+      border:1.5px solid ${isDimmed ? '#e5e7eb' : color}${isActive ? '' : '99'};
+      border-radius:9999px;
+      padding:14px 24px;
+      font-weight:500;
+      font-size:14px;
+      letter-spacing:0.02em;
+      cursor:pointer;
+      box-shadow:${isActive ? `0 6px 28px ${color}55` : '0 2px 12px rgba(15,23,42,0.05)'};
+      opacity:${isDimmed ? 0.4 : 1};
+      transform:scale(${isActive ? 1.06 : 1});
+      transition:all 0.4s cubic-bezier(0.4,0,0.2,1);
+    `.replace(/\s+/g, '');
+  }
+
+  function topicStyle(color) {
+    return `
+      background:#ffffff;
+      color:#374151;
+      border:1px solid ${color}66;
+      border-radius:14px;
+      padding:11px 18px;
+      font-weight:400;
+      font-size:13px;
+      cursor:pointer;
+      box-shadow:0 2px 10px rgba(15,23,42,0.04);
+      transition:all 0.3s ease;
+    `.replace(/\s+/g, '');
+  }
+
+  function edgeStyle(color, opts = {}) {
+    const { dim = false, strong = false } = opts;
+    return `stroke:${dim ? '#d1d5db' : color};stroke-width:${strong ? 1.6 : 1};opacity:${dim ? 0.3 : 0.55};`;
+  }
 
   function buildBaseGraph() {
     const root = {
@@ -25,7 +76,7 @@
       type: 'default',
       data: { label: data.root.label },
       position: { x: 0, y: 0 },
-      style: 'background:#1e1b4b;color:#fff;border:2px solid #818cf8;border-radius:9999px;padding:16px 24px;font-weight:600;font-size:15px;box-shadow:0 0 32px rgba(129,140,248,0.5);'
+      style: rootStyle(false)
     };
 
     const genreNodes = data.genres.map((g, i) => {
@@ -38,7 +89,7 @@
           x: Math.cos(angle) * RADIUS_GENRE,
           y: Math.sin(angle) * RADIUS_GENRE
         },
-        style: `background:${g.color};color:#0f172a;border:none;border-radius:9999px;padding:14px 22px;font-weight:600;font-size:14px;cursor:pointer;box-shadow:0 4px 20px ${g.color}66;transition:all 0.3s;`
+        style: genreStyle(g.color, 'normal')
       };
     });
 
@@ -46,8 +97,8 @@
       id: `e-root-${g.id}`,
       source: 'root',
       target: g.id,
-      animated: true,
-      style: `stroke:${g.color};stroke-width:2;opacity:0.5;`
+      animated: false,
+      style: edgeStyle(g.color)
     }));
 
     nodes.set([root, ...genreNodes]);
@@ -73,7 +124,7 @@
       type: 'default',
       data: { label: data.root.label },
       position: { x: 0, y: 0 },
-      style: 'background:#1e1b4b;color:#fff;border:2px solid #818cf8;border-radius:9999px;padding:12px 20px;font-weight:600;font-size:13px;opacity:0.4;'
+      style: rootStyle(true)
     };
 
     const genreNodes = data.genres.map((g, i) => {
@@ -87,16 +138,19 @@
           x: Math.cos(angle) * RADIUS_GENRE,
           y: Math.sin(angle) * RADIUS_GENRE
         },
-        style: `background:${g.color};color:#0f172a;border:${isActive ? '3px solid #fff' : 'none'};border-radius:9999px;padding:14px 22px;font-weight:600;font-size:14px;cursor:pointer;box-shadow:0 4px ${isActive ? '40px' : '20px'} ${g.color}${isActive ? 'cc' : '66'};transition:all 0.3s;opacity:${isActive ? 1 : 0.35};transform:scale(${isActive ? 1.1 : 1});`
+        style: genreStyle(g.color, isActive ? 'active' : 'dimmed')
       };
     });
 
-    const activeGenreNode = genreNodes.find((n) => n.id === genreId);
-    const cx = activeGenreNode.position.x;
-    const cy = activeGenreNode.position.y;
+    const activeNode = genreNodes.find((n) => n.id === genreId);
+    const cx = activeNode.position.x;
+    const cy = activeNode.position.y;
+    const angleToRoot = Math.atan2(-cy, -cx);
 
     const topicNodes = genre.topics.map((t, i) => {
-      const angle = (i / genre.topics.length) * Math.PI * 2;
+      const span = Math.PI * 1.2;
+      const startAngle = angleToRoot + Math.PI - span / 2;
+      const angle = startAngle + (i / Math.max(1, genre.topics.length - 1)) * span;
       return {
         id: t.id,
         type: 'default',
@@ -105,7 +159,7 @@
           x: cx + Math.cos(angle) * RADIUS_TOPIC,
           y: cy + Math.sin(angle) * RADIUS_TOPIC
         },
-        style: `background:#0f172a;color:${genre.color};border:2px solid ${genre.color};border-radius:14px;padding:10px 16px;font-weight:500;font-size:13px;cursor:pointer;transition:all 0.3s;`
+        style: topicStyle(genre.color)
       };
     });
 
@@ -113,8 +167,8 @@
       id: `e-root-${g.id}`,
       source: 'root',
       target: g.id,
-      animated: g.id === genreId,
-      style: `stroke:${g.color};stroke-width:${g.id === genreId ? 3 : 1};opacity:${g.id === genreId ? 0.9 : 0.15};`
+      animated: false,
+      style: edgeStyle(g.color, { dim: g.id !== genreId, strong: g.id === genreId })
     }));
 
     const topicEdges = genre.topics.map((t) => ({
@@ -122,7 +176,7 @@
       source: genreId,
       target: t.id,
       animated: true,
-      style: `stroke:${genre.color};stroke-width:2;opacity:0.7;`
+      style: edgeStyle(genre.color, { strong: true })
     }));
 
     nodes.set([root, ...genreNodes, ...topicNodes]);
@@ -144,28 +198,30 @@
 </script>
 
 <svelte:head>
-  <title>遊戲設計學習 — 互動心智圖</title>
+  <title>遊戲設計學習</title>
 </svelte:head>
 
 <main>
-  <header>
-    <h1>🎮 遊戲設計學習地圖</h1>
-    <p>點擊類型泡泡展開該領域的設計面向；再點一次摺疊。</p>
-  </header>
+  <div class="hint" class:hidden={selectedGenre}>
+    點擊任一類型開始探索
+  </div>
 
   <div class="flow-wrap">
     <SvelteFlow
       {nodes}
       {edges}
       fitView
-      minZoom={0.3}
-      maxZoom={2}
+      fitViewOptions={{ padding: 0.25 }}
+      minZoom={0.4}
+      maxZoom={1.6}
+      nodesDraggable={false}
+      nodesConnectable={false}
+      elementsSelectable={true}
+      panOnDrag={true}
       proOptions={{ hideAttribution: true }}
       on:nodeclick={handleNodeClick}
     >
-      <Background patternColor="#312e81" bgColor="#0a0a1f" />
-      <Controls />
-      <MiniMap style="background:#1e1b4b;" maskColor="rgba(10,10,31,0.7)" />
+      <Background patternColor="#f1f5f9" bgColor="#fafafa" gap={28} size={1.2} />
     </SvelteFlow>
   </div>
 
@@ -184,7 +240,7 @@
         onclick={(e) => e.stopPropagation()}
         onkeydown={(e) => e.stopPropagation()}
       >
-        <button class="close" onclick={() => (selectedTopic = null)}>×</button>
+        <button class="close" onclick={() => (selectedTopic = null)} aria-label="關閉">×</button>
         <h2>{selectedTopic.label}</h2>
         <p>{selectedTopic.detail}</p>
       </div>
@@ -193,52 +249,50 @@
 </main>
 
 <style>
-  :global(body) {
+  :global(html, body) {
     margin: 0;
-    background: #0a0a1f;
-    color: #e0e7ff;
+    padding: 0;
+    background: #fafafa;
+    color: #1f2937;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC', sans-serif;
     overflow: hidden;
+    -webkit-font-smoothing: antialiased;
   }
 
   main {
     width: 100vw;
     height: 100vh;
-    display: flex;
-    flex-direction: column;
+    position: relative;
   }
 
-  header {
-    padding: 16px 28px;
-    border-bottom: 1px solid #312e81;
-    background: linear-gradient(180deg, #1e1b4b 0%, #0a0a1f 100%);
+  .hint {
+    position: fixed;
+    top: 32px;
+    left: 50%;
+    transform: translateX(-50%);
     z-index: 10;
-  }
-
-  header h1 {
-    margin: 0;
-    font-size: 20px;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-  }
-
-  header p {
-    margin: 4px 0 0;
     font-size: 13px;
-    color: #a5b4fc;
-    opacity: 0.8;
+    color: #9ca3af;
+    letter-spacing: 0.05em;
+    pointer-events: none;
+    transition: opacity 0.4s ease;
+  }
+
+  .hint.hidden {
+    opacity: 0;
   }
 
   .flow-wrap {
-    flex: 1;
-    position: relative;
+    width: 100%;
+    height: 100%;
   }
 
   .detail-panel {
     position: fixed;
     inset: 0;
-    background: rgba(10, 10, 31, 0.7);
-    backdrop-filter: blur(8px);
+    background: rgba(250, 250, 250, 0.65);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -248,47 +302,49 @@
 
   .detail-card {
     position: relative;
-    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
-    border: 1px solid #818cf8;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
     border-radius: 18px;
-    padding: 36px 40px;
-    max-width: 540px;
+    padding: 40px 44px;
+    max-width: 520px;
     width: 90%;
-    box-shadow: 0 20px 60px rgba(129, 140, 248, 0.35);
-    animation: pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 20px 60px rgba(15, 23, 42, 0.08), 0 0 0 1px rgba(15, 23, 42, 0.02);
+    animation: pop 0.35s cubic-bezier(0.34, 1.4, 0.64, 1);
   }
 
   .detail-card h2 {
-    margin: 0 0 16px;
+    margin: 0 0 18px;
     font-size: 22px;
-    color: #fff;
+    font-weight: 600;
+    color: #111827;
+    letter-spacing: 0.01em;
   }
 
   .detail-card p {
     margin: 0;
-    line-height: 1.7;
-    color: #c7d2fe;
+    line-height: 1.8;
+    color: #4b5563;
     font-size: 15px;
   }
 
   .close {
     position: absolute;
-    top: 12px;
-    right: 16px;
+    top: 14px;
+    right: 18px;
     background: none;
     border: none;
-    color: #a5b4fc;
-    font-size: 28px;
+    color: #9ca3af;
+    font-size: 26px;
     cursor: pointer;
     line-height: 1;
     padding: 4px 10px;
     border-radius: 8px;
-    transition: background 0.2s;
+    transition: all 0.2s;
   }
 
   .close:hover {
-    background: rgba(165, 180, 252, 0.15);
-    color: #fff;
+    background: #f3f4f6;
+    color: #4b5563;
   }
 
   @keyframes fade {
@@ -297,20 +353,24 @@
   }
 
   @keyframes pop {
-    from { opacity: 0; transform: scale(0.9) translateY(10px); }
+    from { opacity: 0; transform: scale(0.95) translateY(8px); }
     to { opacity: 1; transform: scale(1) translateY(0); }
   }
 
+  :global(.svelte-flow) {
+    background: #fafafa !important;
+  }
+
   :global(.svelte-flow__node) {
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    transition: transform 0.4s cubic-bezier(0.4,0,0.2,1);
   }
 
   :global(.svelte-flow__node:hover) {
-    transform: scale(1.08);
+    transform: translateY(-2px);
     z-index: 10;
   }
 
   :global(.svelte-flow__edge-path) {
-    transition: stroke-width 0.3s, opacity 0.3s;
+    transition: stroke 0.4s, stroke-width 0.4s, opacity 0.4s;
   }
 </style>
