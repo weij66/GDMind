@@ -2,16 +2,48 @@
   import { onMount } from 'svelte';
   import { SvelteFlow, Background } from '@xyflow/svelte';
   import { writable } from 'svelte/store';
+  import { base } from '$app/paths';
+  import { marked } from 'marked';
   import '@xyflow/svelte/dist/style.css';
   import data from '$lib/data/genres.json';
 
+  marked.setOptions({ breaks: true, gfm: true });
+
+  let topicHtml = $state('');
+  let topicLoading = $state(false);
+
+  /** @param {{id:string, label:string, detail:string}} topic */
+  async function loadTopicMarkdown(topic) {
+    topicLoading = true;
+    topicHtml = '';
+    try {
+      const res = await fetch(`${base}/topics/${topic.id}.md`);
+      if (res.ok) {
+        const md = await res.text();
+        topicHtml = /** @type {string} */ (marked.parse(md));
+        topicLoading = false;
+        return;
+      }
+    } catch {}
+    topicHtml = `<p>${topic.detail}</p>`;
+    topicLoading = false;
+  }
+
+  /** @type {import('svelte/store').Writable<any[]>} */
   const nodes = writable([]);
+  /** @type {import('svelte/store').Writable<any[]>} */
   const edges = writable([]);
 
   // 四幕：1=只有總領, 2=展開類型, 3=展開類型內面向, 4=面向詳情面板
   let stage = $state(1);
+  /** @type {string | null} */
   let selectedGenre = $state(null);
+  /** @type {{id:string, label:string, detail:string, _color?:string} | null} */
   let selectedTopic = $state(null);
+
+  $effect(() => {
+    if (selectedTopic) loadTopicMarkdown(selectedTopic);
+  });
 
   const RADIUS_GENRE = 320;
   const RADIUS_TOPIC = 200;
@@ -190,7 +222,8 @@
       source: 'root',
       target: g.id,
       animated: false,
-      style: edgeStyle(g.color, { dim: g.id !== genreId, strong: g.id === genreId })
+      style: edgeStyle(g.color, { dim: g.id !== genreId, strong: g.id === genreId }),
+      className: g.id === genreId ? 'edge-flow' : ''
     }));
 
     const topicEdges = genre.topics.map((t) => ({
@@ -199,7 +232,7 @@
       target: t.id,
       animated: false,
       style: edgeStyle(genre.color, { strong: true }),
-      className: 'edge-grow'
+      className: 'edge-grow edge-flow'
     }));
 
     nodes.set([root, ...genreNodes, ...topicNodes]);
@@ -280,21 +313,21 @@
   </div>
 
   {#if selectedTopic}
-    <aside
-      class="hud-panel"
-      role="dialog"
-      aria-modal="false"
-      tabindex="-1"
-      onkeydown={(e) => e.key === 'Escape' && closeTopic()}
-    >
+    <div class="hud-panel" role="region" aria-label="設計面向詳情">
       <div class="hud-header" style="--accent: {selectedTopic._color || '#7dd3fc'};">
         <span class="hud-tag">設計面向</span>
         <button class="close" onclick={closeTopic} aria-label="關閉">×</button>
       </div>
       <h2>{selectedTopic.label}</h2>
-      <p>{selectedTopic.detail}</p>
+      <div class="hud-body">
+        {#if topicLoading}
+          <p class="loading">載入中…</p>
+        {:else}
+          {@html topicHtml}
+        {/if}
+      </div>
       <div class="hud-foot">按 ESC 或點擊 × 關閉</div>
-    </aside>
+    </div>
   {/if}
 </main>
 
@@ -394,12 +427,107 @@
     line-height: 1.3;
   }
 
-  .hud-panel p {
-    margin: 0;
+  .hud-body {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 6px;
     line-height: 1.85;
     color: #cbd5e1;
-    font-size: 15px;
-    flex: 1;
+    font-size: 14.5px;
+  }
+
+  .hud-body :global(p) { margin: 0 0 12px; }
+  .hud-body :global(h1) { display: none; }
+  .hud-body :global(h2) {
+    font-size: 16px;
+    color: #f1f5f9;
+    margin: 22px 0 10px;
+    letter-spacing: 0.04em;
+    border-left: 3px solid var(--accent, #7dd3fc);
+    padding-left: 10px;
+    line-height: 1.4;
+  }
+  .hud-body :global(h3) {
+    font-size: 14px;
+    color: #e2e8f0;
+    margin: 18px 0 6px;
+    font-weight: 600;
+  }
+  .hud-body :global(blockquote) {
+    margin: 0 0 14px;
+    padding: 10px 14px;
+    border-left: 3px solid var(--accent, #7dd3fc);
+    background: rgba(125, 211, 252, 0.06);
+    border-radius: 4px;
+    color: #e0e7ff;
+    font-style: normal;
+  }
+  .hud-body :global(blockquote p) { margin: 0; }
+  .hud-body :global(ul),
+  .hud-body :global(ol) { padding-left: 20px; margin: 0 0 14px; }
+  .hud-body :global(li) { margin: 4px 0; }
+  .hud-body :global(strong) { color: #fef3c7; font-weight: 600; }
+  .hud-body :global(em) { color: #f5d0fe; font-style: normal; }
+  .hud-body :global(code) {
+    background: rgba(125, 211, 252, 0.12);
+    color: #93c5fd;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+  }
+  .hud-body :global(pre) {
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(125, 211, 252, 0.15);
+    border-radius: 8px;
+    padding: 12px 14px;
+    overflow-x: auto;
+    margin: 0 0 14px;
+  }
+  .hud-body :global(pre code) {
+    background: none;
+    padding: 0;
+    color: #cbd5e1;
+  }
+  .hud-body :global(table) {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0 0 14px;
+    font-size: 13px;
+  }
+  .hud-body :global(th),
+  .hud-body :global(td) {
+    padding: 8px 10px;
+    border: 1px solid rgba(125, 211, 252, 0.15);
+    text-align: left;
+  }
+  .hud-body :global(th) {
+    background: rgba(125, 211, 252, 0.08);
+    color: #f1f5f9;
+    font-weight: 600;
+  }
+  .hud-body :global(hr) {
+    border: none;
+    border-top: 1px solid rgba(125, 211, 252, 0.15);
+    margin: 18px 0;
+  }
+  .hud-body :global(a) { color: var(--accent, #7dd3fc); }
+  .hud-body :global(input[type="checkbox"]) { accent-color: var(--accent, #7dd3fc); margin-right: 6px; }
+
+  .loading {
+    color: #64748b;
+    font-size: 13px;
+    letter-spacing: 0.15em;
+    text-align: center;
+    margin-top: 40px;
+  }
+
+  /* 自訂卷軸 */
+  .hud-body::-webkit-scrollbar { width: 6px; }
+  .hud-body::-webkit-scrollbar-track { background: transparent; }
+  .hud-body::-webkit-scrollbar-thumb {
+    background: rgba(125, 211, 252, 0.25);
+    border-radius: 3px;
   }
 
   .hud-foot {
@@ -466,8 +594,22 @@
     stroke-dashoffset: 600;
     animation: edge-grow 700ms cubic-bezier(0.5, 0, 0.2, 1) forwards;
   }
-
   @keyframes edge-grow {
     to { stroke-dashoffset: 0; }
+  }
+
+  /* 連線能量流動：edge-flow 類別的邊線持續流動，模擬資訊流 */
+  :global(.svelte-flow__edge.edge-flow .svelte-flow__edge-path) {
+    stroke-dasharray: 6 10;
+    animation: edge-flow 1.6s linear infinite;
+  }
+  :global(.svelte-flow__edge.edge-grow.edge-flow .svelte-flow__edge-path) {
+    animation:
+      edge-grow 700ms cubic-bezier(0.5, 0, 0.2, 1) forwards,
+      edge-flow 1.6s linear 700ms infinite;
+  }
+  @keyframes edge-flow {
+    from { stroke-dashoffset: 0; }
+    to { stroke-dashoffset: -32; }
   }
 </style>
