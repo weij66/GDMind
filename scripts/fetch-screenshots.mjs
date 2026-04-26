@@ -7,24 +7,34 @@ const GENRES_PATH = resolve('src/lib/data/genres.json');
 
 const data = JSON.parse(readFileSync(GENRES_PATH, 'utf-8'));
 
-// 收集所有不重複的 appid
+// 收集 appid；跳過已有 screenshot 的（重跑只補缺）
 const appids = new Set();
+const filled = new Set();
 for (const g of data.genres) {
   for (const t of g.topics) {
     for (const e of t.examples || []) {
-      if (e.appid) appids.add(e.appid);
+      if (!e.appid) continue;
+      if (e.screenshot) filled.add(e.appid);
+      else appids.add(e.appid);
     }
   }
 }
-console.log(`要抓 ${appids.size} 個 app 的截圖`);
+console.log(`已有 ${filled.size} 個 app 截圖，需要再抓 ${appids.size} 個`);
 
 const cache = new Map();
 
-async function fetchScreenshots(appid) {
+async function fetchScreenshots(appid, attempt = 0) {
   if (cache.has(appid)) return cache.get(appid);
   const url = `https://store.steampowered.com/api/appdetails?appids=${appid}&l=english`;
   try {
     const res = await fetch(url);
+    if (res.status === 429) {
+      if (attempt >= 3) throw new Error(`HTTP 429 (放棄)`);
+      const wait = 30_000 * Math.pow(2, attempt);
+      process.stdout.write(` 429, 等 ${wait / 1000}s...`);
+      await new Promise((r) => setTimeout(r, wait));
+      return fetchScreenshots(appid, attempt + 1);
+    }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
     const entry = json[String(appid)];
@@ -42,14 +52,14 @@ async function fetchScreenshots(appid) {
   }
 }
 
-// 依序抓（Steam 有 rate limit，每個間隔 200ms）
+// 依序抓（Steam rate limit：每個間隔 1.5s）
 const ids = [...appids];
 for (let i = 0; i < ids.length; i++) {
   const id = ids[i];
   process.stdout.write(`[${i + 1}/${ids.length}] appid=${id} ... `);
   const shots = await fetchScreenshots(id);
   console.log(`${shots.length} 張`);
-  await new Promise((r) => setTimeout(r, 220));
+  await new Promise((r) => setTimeout(r, 1500));
 }
 
 // 寫回每個 example 的 screenshot 欄位（取前 2 張）

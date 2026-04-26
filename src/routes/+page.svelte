@@ -402,18 +402,14 @@
     <div class="grain"></div>
   </div>
 
-  <!-- 範例遊戲截圖：hover 元素時左右兩側顯示 -->
-  {#if hovered && stage === 'genre'}
-    {@const allExamples = /** @type {any[]} */ (hovered.genre.topics).flatMap(
-      (/** @type {any} */ t) =>
-        (t.examples || []).map((/** @type {any} */ e) => ({
-          ...e,
-          topicLabel: t.label
-        }))
+  <!-- 範例遊戲截圖：hover 氣泡時，該 topic 自己的 4 張截圖左右兩側各 2 張 -->
+  {#if hovered && hovered.topic && stage === 'genre'}
+    {@const topicExamples = /** @type {any[]} */ (hovered.topic.examples || []).map(
+      (/** @type {any} */ e) => ({ ...e, topicLabel: hovered.topic.label })
     )}
-    {@const half = Math.ceil(allExamples.length / 2)}
-    {@const leftList = allExamples.slice(0, half)}
-    {@const rightList = allExamples.slice(half)}
+    {@const half = Math.ceil(topicExamples.length / 2)}
+    {@const leftList = topicExamples.slice(0, half)}
+    {@const rightList = topicExamples.slice(half)}
     <aside
       class="examples-rail left"
       style="--c:{hovered.genre.color};"
